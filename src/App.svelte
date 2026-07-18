@@ -33,7 +33,6 @@
     closePort,
     writeData,
     destroySession,
-    configureReconnect,
     DEFAULT_CONFIG,
     DEFAULT_RECONNECT,
     type PortConfig,
@@ -141,10 +140,15 @@
     if (!sid) return;
     const s = $sessions[sid];
     if (!s) return;
+    if (!s.config.port_name) {
+      alert($_("config.portPlaceholder"));
+      return;
+    }
     patchSession(sid, { state: "connecting" });
     try {
-      await configureReconnect(sid, s.reconnect);
-      await openPort(sid);
+      // Push the LATEST config + reconnect policy to the backend at connect
+      // time — the session was created with an empty placeholder port_name.
+      await openPort(sid, s.config, s.reconnect);
     } catch (e) {
       patchSession(sid, { state: "disconnected" });
       console.error("connect failed", e);
@@ -253,9 +257,9 @@
 
 <svelte:window on:keydown={onGlobalKey} />
 
-<main class="flex h-screen w-screen flex-col bg-surface text-gray-100">
+<main class="flex h-screen w-screen flex-col overflow-hidden bg-surface text-gray-100">
   <!-- Title bar -->
-  <header class="flex items-center justify-between border-b border-surface-border px-3 py-2">
+  <header class="flex flex-shrink-0 items-center justify-between border-b border-surface-border px-3 py-2">
     <div class="flex items-center gap-2">
       <h1 class="text-sm font-semibold tracking-wide">MySerial</h1>
       <span class="text-xs text-gray-500">·</span>
@@ -280,7 +284,7 @@
   </header>
 
   <!-- Tab strip -->
-  <nav class="flex items-stretch gap-px overflow-x-auto border-b border-surface-border bg-surface-card">
+  <nav class="flex flex-shrink-0 items-stretch gap-px overflow-x-auto border-b border-surface-border bg-surface-card">
     {#each $tabs as tab (tab.sessionId)}
       <div
         class="group flex cursor-pointer items-center gap-2 whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors
@@ -340,10 +344,13 @@
       onDisconnect={onDisconnect}
     />
 
-    <!-- Terminal + toolbar -->
-    <section class="relative flex flex-1 flex-col overflow-hidden">
+    <!-- Terminal + toolbar. Flex column: controls strip on top (shrink-0),
+         terminal pane fills the rest. The pane itself is `relative` so the
+         inner Terminal (absolute inset-0) gets a concrete pixel size before
+         xterm's FitAddon runs. -->
+    <section class="flex min-h-0 flex-1 flex-col overflow-hidden">
       <!-- Display controls strip -->
-      <div class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-surface-border bg-surface-card/60 px-3 py-1 text-xs">
+      <div class="flex flex-shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-surface-border bg-surface-card/60 px-3 py-1 text-xs">
         <label class="flex items-center gap-1">
           <span class="text-gray-400">{$_("display.mode")}:</span>
           <select
@@ -406,7 +413,7 @@
       </div>
 
       {#key active.id}
-        <div class="min-h-0 flex-1">
+        <div class="relative min-h-0 flex-1 overflow-hidden">
           <Terminal
             bind:this={termRefs[active.id]}
             sessionId={active.id}

@@ -21,7 +21,7 @@
   }
 </script>
 
-<div class="flex flex-wrap items-end gap-x-4 gap-y-2 p-3">
+<div class="flex flex-shrink-0 flex-wrap items-end gap-x-4 gap-y-2 border-b border-surface-border p-3">
   <!-- Port -->
   <label class="flex flex-col gap-1">
     <span class="text-xs text-gray-400">{$_("config.port")}</span>

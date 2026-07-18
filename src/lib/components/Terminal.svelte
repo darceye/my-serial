@@ -90,26 +90,32 @@
     if (sessionStart === null) sessionStart = Date.now();
 
     if (displayMode === "ascii") {
-      // ASCII mode: optionally strip color, normalize EOL, prefix timestamps.
+      // ASCII mode. We normalize ALL line endings to a single \n first, then
+      // let xterm's convertEol handle \n → \r\n. This prevents the double-newline
+      // bug: a device sending "hello\r\n" would otherwise become "hello\r\r\n"
+      // (the explicit \r plus convertEol's \r) producing phantom blank lines.
       let out = colorParse ? text : text.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "");
-      if (eolMode !== "raw") {
-        const target = eolMode;
-        out = out.replace(/\r\n|\r|\n/g, target === "\n" ? "\n" : "\r\n");
-        // xterm needs \r to return carriage before \n, so normalize to \r\n.
-        out = out.replace(/\n/g, "\r\n").replace(/\r\r\n/g, "\r\n");
-      }
+      out = out.replace(/\r\n|\r/g, "\n");
       if (timestamp !== "off") {
-        // Insert prefix at the start of each line.
-        out = out
-          .split(/(\r?\n)/)
-          .map((seg, i) =>
-            /\r?\n/.test(seg) || seg === ""
-              ? seg
-              : (atLineStart ? linePrefix() : "") + seg,
-          )
-          .join("");
-        // Recompute atLineStart: true if out ended with newline.
-        atLineStart = /\r?\n$/.test(out);
+        // Insert a prefix at the start of each logical line. We split on \n
+        // (keeping it) and prepend the prefix to non-empty segments when we're
+        // at a line start.
+        const parts = out.split("\n");
+        const rebuilt: string[] = [];
+        for (let i = 0; i < parts.length; i++) {
+          const seg = parts[i];
+          if (seg !== "") {
+            if (atLineStart) rebuilt.push(linePrefix());
+            rebuilt.push(seg);
+            atLineStart = false;
+          }
+          // A \n was originally between this and the next part (unless last).
+          if (i < parts.length - 1) {
+            rebuilt.push("\n");
+            atLineStart = true;
+          }
+        }
+        out = rebuilt.join("");
       }
       pending += out;
     } else {
@@ -142,7 +148,10 @@
       lineHeight: 1.2,
       cursorBlink: true,
       scrollback: 10000,
-      convertEol: false,
+      // Treat a lone \n as \r\n so device output that only sends LF still
+      // returns the cursor to column 0 (otherwise it keeps writing at the
+      // current column, which visually looks like phantom blank lines).
+      convertEol: true,
       allowProposedApi: true,
       theme: dark
         ? {
@@ -184,7 +193,27 @@
     term.loadAddon(search);
     term.loadAddon(new WebLinksAddon());
     term.open(container);
-    fit.fit();
+
+    // Robust initial fit: wait for the container to have a non-zero size,
+    // then fit. We retry a few frames because flex layout + absolute fill
+    // may take more than one paint to settle.
+    const tryFit = (retries: number) => {
+      const rect = container.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        try {
+          fit.fit();
+          term.focus();
+          return;
+        } catch {
+          /* fall through to retry */
+        }
+      }
+      if (retries > 0) {
+        requestAnimationFrame(() => tryFit(retries - 1));
+      }
+    };
+    // Double-RAF: first frame lays out, second frame dimensions are stable.
+    requestAnimationFrame(() => requestAnimationFrame(() => tryFit(5)));
 
     // Pipe backend data into the terminal (batched).
     unlistenData = await onData(sessionId, (p) => {
@@ -194,16 +223,21 @@
 
     // On reconnect, write a visual divider so the user sees the gap.
     unlistenReconnected = await onReconnected(sessionId, () => {
-      term.write("\r\n\x1b[33m―― 已重新连接 / reconnected ――\x1b[0m\r\n");
+      // Use single \n (convertEol handles carriage return) to avoid blank lines.
+      term.write("\n\x1b[33m―― 已重新连接 / reconnected ――\x1b[0m\n");
     });
 
-    // Refit on container resize.
+    // Refit on container resize, debounced.
+    let resizeTimer: ReturnType<typeof setTimeout> | null = null;
     ro = new ResizeObserver(() => {
-      try {
-        fit.fit();
-      } catch {
-        /* terminal not yet ready */
-      }
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        try {
+          fit.fit();
+        } catch {
+          /* terminal not yet ready */
+        }
+      }, 50);
     });
     ro.observe(container);
 
@@ -254,12 +288,26 @@
   }
 </script>
 
-<div bind:this={container} class="h-full w-full overflow-hidden"></div>
+<div bind:this={container} class="terminal-container"></div>
 
 <style>
+  /* Absolute fill the `relative` parent so the container has a concrete
+     pixel size BEFORE xterm's FitAddon measures it on mount. Without this,
+     flex layout can report height 0 during the mount tick and xterm renders
+     only a tiny block in the corner. */
+  .terminal-container {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    /* Small inset so text isn't flush against the border. Applied here on
+       the container (not on .xterm) so FitAddon measures the full box and
+       xterm's internal layout matches the measured dimensions. */
+    padding: 4px 6px;
+    box-sizing: border-box;
+  }
   :global(.xterm) {
     height: 100%;
-    padding: 4px 6px;
+    /* NO padding here — padding on .xterm breaks FitAddon's row-count math. */
   }
   :global(.xterm-viewport) {
     overflow-y: auto;

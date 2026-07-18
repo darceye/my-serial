@@ -38,8 +38,23 @@ pub fn create_session(
 }
 
 /// Open the port for an existing session and start the read loop.
+/// Accepts an optional `config` so the frontend can push the latest port
+/// settings at connect time (the session was created with a placeholder
+/// empty port_name before the user picked a device).
 #[tauri::command]
-pub fn open_port(app: AppHandle, manager: State<'_, SessionManager>, session_id: String) -> Result<(), String> {
+pub fn open_port(
+    app: AppHandle,
+    manager: State<'_, SessionManager>,
+    session_id: String,
+    config: Option<PortConfig>,
+    reconnect: Option<ReconnectConfig>,
+) -> Result<(), String> {
+    if let Some(cfg) = config {
+        manager.set_config(&session_id, cfg)?;
+    }
+    if let Some(rc) = reconnect {
+        manager.set_reconnect(&session_id, rc)?;
+    }
     manager.open(&app, &session_id)
 }
 

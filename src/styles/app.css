@@ -16,6 +16,13 @@ body,
   padding: 0;
 }
 
+/* Make #app a flex container so its single child <main> can claim the full
+   height via flex-1 rather than relying on h-screen alone. */
+#app {
+  display: flex;
+  flex-direction: column;
+}
+
 body {
   font-family: "Segoe UI Variable", "Segoe UI", -apple-system,
     "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
@@ -41,8 +48,9 @@ body {
   background: #5a5a5a;
 }
 
-/* xterm container fills its parent */
+/* xterm container fills its parent. NO padding here — padding on .xterm
+   breaks FitAddon's row/col calculation. Inset is applied on the wrapper
+   .terminal-container inside Terminal.svelte instead. */
 .xterm {
   height: 100%;
-  padding: 6px;
 }

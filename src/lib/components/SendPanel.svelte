@@ -80,13 +80,13 @@
 
 <svelte:window on:beforeunload={() => { if (loopTimer) clearInterval(loopTimer); }} />
 
-<div class="flex flex-col gap-2 border-t border-surface-border bg-surface-card p-3">
+<div class="flex flex-shrink-0 flex-col gap-2 border-t border-surface-border bg-surface-card p-3">
   <div class="flex items-center gap-2 text-xs text-gray-400">
     <Send size={13} />
     <span>{$_("send.title")}</span>
   </div>
 
-  <textarea
+  <textarea style="width:100%;"
     bind:value={text}
     on:keydown={(e) => {
       // Ctrl+Enter or Enter (when not multiline) sends.

@@ -83,8 +83,12 @@ export async function createSession(
   return invoke<string>("create_session", { config, reconnect });
 }
 
-export async function openPort(sessionId: string): Promise<void> {
-  await invoke("open_port", { sessionId });
+export async function openPort(
+  sessionId: string,
+  config?: PortConfig,
+  reconnect?: ReconnectConfig,
+): Promise<void> {
+  await invoke("open_port", { sessionId, config, reconnect });
 }
 
 export async function closePort(sessionId: string): Promise<void> {

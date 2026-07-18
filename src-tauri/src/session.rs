@@ -407,6 +407,15 @@ impl SessionManager {
         Ok(())
     }
 
+    /// Update a session's port config at runtime (used when the user picks a
+    /// different port after the session was created with an empty placeholder).
+    pub fn set_config(&self, id: &str, config: PortConfig) -> Result<(), String> {
+        let mut guard = self.sessions.lock().unwrap();
+        let session = guard.get_mut(id).ok_or_else(|| format!("session {} not found", id))?;
+        session.config = config;
+        Ok(())
+    }
+
     /// Handle a read-error report from the read loop: attempt reconnection
     /// per the session's reconnect policy.
     pub fn handle_read_error(&self, app: &AppHandle, id: &str, kind: &str) {

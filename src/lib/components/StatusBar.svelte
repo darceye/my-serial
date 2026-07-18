@@ -56,7 +56,7 @@
   })();
 </script>
 
-<div class="flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-surface-border bg-surface px-3 py-1.5 text-xs text-gray-300">
+<div class="flex flex-shrink-0 flex-wrap items-center gap-x-5 gap-y-1 border-t border-surface-border bg-surface px-3 py-1.5 text-xs text-gray-300">
   <!-- Connection state -->
   <div class="flex items-center gap-1.5">
     <span class="inline-block h-2 w-2 rounded-full {stateColor}"></span>
