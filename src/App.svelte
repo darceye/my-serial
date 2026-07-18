@@ -1,79 +1,447 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { _ } from "svelte-i18n";
   import { locale } from "$lib/i18n";
-  import { Languages, CheckCircle2, Loader2 } from "@lucide/svelte";
-  import { getAppInfo, type AppInfo } from "$lib/tauri/commands";
+  import {
+    Languages,
+    Plus,
+    X,
+    Eraser,
+    Trash2,
+    Sun,
+    Moon,
+  } from "@lucide/svelte";
 
-  let info: AppInfo | null = null;
-  let error: string | null = null;
-  let loading = true;
+  import {
+    activeSessionId,
+    activeSession,
+    sessions,
+    tabs,
+    ports,
+    theme,
+    createTabRecord,
+    patchSession,
+    addTxBytes,
+    pushHistory,
+    recordLine,
+  } from "$lib/stores/session";
+
+  import {
+    listPorts,
+    createSession,
+    openPort,
+    closePort,
+    writeData,
+    destroySession,
+    configureReconnect,
+    DEFAULT_CONFIG,
+    DEFAULT_RECONNECT,
+    type PortConfig,
+  } from "$lib/tauri/commands";
+  import { appendLog, exportLines, type ExportFormat } from "$lib/services/recorder";
+  import {
+    onStatus,
+    onSignal,
+    onPortsChanged,
+  } from "$lib/tauri/events";
+
+  import PortConfigPanel from "$lib/components/PortConfigPanel.svelte";
+  import SendPanel from "$lib/components/SendPanel.svelte";
+  import StatusBar from "$lib/components/StatusBar.svelte";
+  import Terminal from "$lib/components/Terminal.svelte";
+
+  let termRefs: Record<string, Terminal> = {};
+  const unlistenFns: (() => void)[] = [];
+  // Per-session event unsubscribers.
+  const sessionUnsubs: Record<string, (() => void)[]> = {};
+
+  $: active = $activeSession;
 
   onMount(async () => {
-    try {
-      info = await getAppInfo();
-    } catch (e) {
-      error = String(e);
-    } finally {
-      loading = false;
-    }
+    document.documentElement.classList.toggle("light", $theme === "light");
+    await refreshPorts();
+    // Start with one tab.
+    await newTab();
+    // Global ports-changed listener.
+    unlistenFns.push(await onPortsChanged(async () => { await refreshPorts(); }));
   });
+
+  onDestroy(() => {
+    unlistenFns.forEach((f) => f());
+    Object.values(sessionUnsubs).flat().forEach((f) => f());
+  });
+
+  async function refreshPorts() {
+    ports.set(await listPorts());
+  }
+
+  async function newTab(config?: PortConfig) {
+    const cfg = config ?? { ...DEFAULT_CONFIG };
+    const rc = { ...DEFAULT_RECONNECT };
+    const sid = await createSession(cfg, rc);
+    const rec = createTabRecord(sid, cfg, rc);
+    sessions.update((s) => ({ ...s, [sid]: rec }));
+    tabs.update((t) => [...t, { sessionId: sid, label: rec.title }]);
+    activeSessionId.set(sid);
+    await subscribeSession(sid);
+    // Focus terminal after render.
+    setTimeout(() => termRefs[sid]?.fitToContainer(), 50);
+  }
+
+  async function subscribeSession(sid: string) {
+    sessionUnsubs[sid] = [
+      await onStatus(sid, (p) => {
+        patchSession(sid, {
+          state: p.state,
+          attempts: p.attempts ?? 0,
+          maxAttempts: p.max_attempts ?? 0,
+          connectedAt: p.state === "connected" ? Date.now() : null,
+        });
+      }),
+      await onSignal(sid, (p) => {
+        sessions.update((s) => {
+          if (!s[sid]) return s;
+          return { ...s, [sid]: { ...s[sid], signals: { cts: p.cts, dsr: p.dsr, cd: p.cd, ri: p.ri } } };
+        });
+      }),
+    ];
+  }
+
+  async function closeTab(sid: string) {
+    // Clean up session on backend.
+    try { await destroySession(sid); } catch { /* ignore */ }
+    // Unsubscribe events.
+    sessionUnsubs[sid]?.forEach((f) => f());
+    delete sessionUnsubs[sid];
+    delete termRefs[sid];
+    // Update stores.
+    sessions.update((s) => { const n = { ...s }; delete n[sid]; return n; });
+    tabs.update((t) => {
+      const filtered = t.filter((x) => x.sessionId !== sid);
+      if ($activeSessionId === sid) {
+        activeSessionId.set(filtered[0]?.sessionId ?? null);
+      }
+      return filtered;
+    });
+    // If no tabs left, create a fresh one.
+    if (getTabs().length === 0) {
+      await newTab();
+    }
+  }
+
+  function getTabs() {
+    let t: { sessionId: string; label: string }[] = [];
+    const unsub = tabs.subscribe((v) => (t = v));
+    unsub();
+    return t;
+  }
+
+  async function onConnect() {
+    const sid = $activeSessionId;
+    if (!sid) return;
+    const s = $sessions[sid];
+    if (!s) return;
+    patchSession(sid, { state: "connecting" });
+    try {
+      await configureReconnect(sid, s.reconnect);
+      await openPort(sid);
+    } catch (e) {
+      patchSession(sid, { state: "disconnected" });
+      console.error("connect failed", e);
+      alert(`${$_("toast.connectFailed", { values: { msg: String(e) } })}`);
+    }
+  }
+
+  async function onDisconnect() {
+    const sid = $activeSessionId;
+    if (!sid) return;
+    try { await closePort(sid); } catch (e) { console.error(e); }
+  }
+
+  async function onSend(bytes: number[]) {
+    const sid = $activeSessionId;
+    if (!sid) return;
+    try {
+      await writeData(sid, bytes);
+      addTxBytes(sid, bytes.length);
+      const decoded = new TextDecoder().decode(new Uint8Array(bytes));
+      // Echo sent bytes into the terminal in a dim color (helpful for debugging).
+      termRefs[sid]?.writeText(`\x1b[90m${decoded}\x1b[0m`);
+      if (bytes.length > 0) pushHistory(sid, decoded.replace(/[\r\n]+$/, ""));
+      // Record for export + optional file logging.
+      recordLine(sid, "tx", decoded);
+      const s = $sessions[sid];
+      if (s?.logging) appendLog(sid, { ts: Date.now(), dir: "tx", text: decoded });
+    } catch (e) {
+      console.error("write failed", e);
+      alert(`${$_("toast.writeFailed", { values: { msg: String(e) } })}`);
+    }
+  }
+
+  function onClearTerminal() {
+    const sid = $activeSessionId;
+    if (!sid) return;
+    termRefs[sid]?.clear();
+  }
+
+  /** Called by Terminal for every RX chunk — records for export + optional file logging. */
+  function handleRxChunk(sid: string, ts: number, text: string) {
+    recordLine(sid, "rx", text);
+    const s = $sessions[sid];
+    if (s?.logging) {
+      appendLog(sid, { ts, dir: "rx", text });
+    }
+  }
+
+  async function exportCurrent(format: ExportFormat) {
+    const sid = $activeSessionId;
+    if (!sid) return;
+    const s = $sessions[sid];
+    if (!s || s.recorded.length === 0) {
+      alert("No data to export");
+      return;
+    }
+    try {
+      const path = await exportLines(sid, s.recorded, format);
+      alert(`${$_("toast.exported", { values: { path } })}`);
+    } catch (e) {
+      alert(`${$_("toast.exportFailed", { values: { msg: String(e) } })}`);
+    }
+  }
+
+  function toggleLogging() {
+    const sid = $activeSessionId;
+    if (!sid) return;
+    const s = $sessions[sid];
+    patchSession(sid, { logging: !s.logging });
+  }
 
   function toggleLocale() {
     locale.update((v) => (v === "zh-CN" ? "en-US" : "zh-CN"));
   }
+
+  function toggleTheme() {
+    theme.update((v) => (v === "dark" ? "light" : "dark"));
+  }
+
+  /** Global keyboard shortcuts (active only when not typing in an input). */
+  function onGlobalKey(e: KeyboardEvent) {
+    const target = e.target as HTMLElement;
+    const typing =
+      target.tagName === "INPUT" ||
+      target.tagName === "TEXTAREA" ||
+      target.tagName === "SELECT" ||
+      target.isContentEditable;
+    if (typing) return;
+    if (e.ctrlKey && e.key === "l") {
+      e.preventDefault();
+      onClearTerminal();
+    } else if (e.ctrlKey && e.shiftKey && (e.key === "n" || e.key === "N")) {
+      e.preventDefault();
+      newTab();
+    } else if (e.ctrlKey && e.key === "Tab") {
+      e.preventDefault();
+      const list = getTabs();
+      if (list.length > 1) {
+        const idx = list.findIndex((t) => t.sessionId === $activeSessionId);
+        const next = list[(idx + 1) % list.length];
+        activeSessionId.set(next.sessionId);
+      }
+    }
+  }
 </script>
 
+<svelte:window on:keydown={onGlobalKey} />
+
 <main class="flex h-screen w-screen flex-col bg-surface text-gray-100">
-  <!-- Title bar placeholder (real chrome comes later; for now this is the visual anchor) -->
-  <header
-    class="flex items-center justify-between border-b border-surface-border px-5 py-3"
-  >
-    <div>
-      <h1 class="text-base font-semibold tracking-wide">
-        $_("app.title")
-      </h1>
-      <p class="text-xs text-gray-400">$_("app.subtitle")</p>
+  <!-- Title bar -->
+  <header class="flex items-center justify-between border-b border-surface-border px-3 py-2">
+    <div class="flex items-center gap-2">
+      <h1 class="text-sm font-semibold tracking-wide">MySerial</h1>
+      <span class="text-xs text-gray-500">·</span>
+      <span class="text-xs text-gray-400">{$_("app.subtitle")}</span>
     </div>
-    <button
-      class="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm hover:bg-surface-hover"
-      on:click={toggleLocale}
-      title={$_("menu.language")}
-    >
-      <Languages size={16} />
-      <span>{$locale === "zh-CN" ? "中文" : "EN"}</span>
-    </button>
+    <div class="flex items-center gap-1">
+      <button
+        class="rounded p-1.5 hover:bg-surface-hover"
+        on:click={toggleLocale}
+        title={$_("menu.language")}
+      >
+        <Languages size={16} />
+      </button>
+      <button
+        class="rounded p-1.5 hover:bg-surface-hover"
+        on:click={toggleTheme}
+        title={$_("menu.theme")}
+      >
+        {#if $theme === "dark"}<Sun size={16} />{:else}<Moon size={16} />{/if}
+      </button>
+    </div>
   </header>
 
-  <!-- Body: Phase-0 verification panel -->
-  <section class="flex flex-1 items-center justify-center p-8">
-    <div
-      class="w-full max-w-xl rounded-xl border border-surface-border bg-surface-card p-8 shadow-xl"
+  <!-- Tab strip -->
+  <nav class="flex items-stretch gap-px overflow-x-auto border-b border-surface-border bg-surface-card">
+    {#each $tabs as tab (tab.sessionId)}
+      <div
+        class="group flex cursor-pointer items-center gap-2 whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors
+          {$activeSessionId === tab.sessionId
+            ? 'border-accent bg-surface text-white'
+            : 'border-transparent text-gray-400 hover:bg-surface-hover'}"
+        role="tab"
+        tabindex="0"
+        on:click={() => {
+          activeSessionId.set(tab.sessionId);
+          setTimeout(() => termRefs[tab.sessionId]?.fitToContainer(), 50);
+        }}
+        on:keydown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            activeSessionId.set(tab.sessionId);
+          }
+        }}
+      >
+        <span>{$sessions[tab.sessionId]?.title ?? tab.label}</span>
+        <span
+          class="inline-block h-1.5 w-1.5 rounded-full
+            {$sessions[tab.sessionId]?.state === 'connected' ? 'bg-green-500'
+            : $sessions[tab.sessionId]?.state === 'reconnecting' ? 'bg-yellow-500'
+            : $sessions[tab.sessionId]?.state === 'lost' ? 'bg-red-500'
+            : 'bg-gray-600'}"
+        ></span>
+        <button
+          type="button"
+          class="ml-1 rounded p-0.5 opacity-0 hover:bg-surface-border group-hover:opacity-100"
+          on:click|stopPropagation={() => closeTab(tab.sessionId)}
+          aria-label={$_("common.close")}
+        >
+          <X size={12} />
+        </button>
+      </div>
+    {/each}
+    <button
+      class="flex items-center px-3 text-gray-400 hover:bg-surface-hover hover:text-white"
+      on:click={() => newTab()}
+      title={$_("common.newTab")}
     >
-      {#if loading}
-        <div class="flex items-center gap-3 text-gray-300">
-          <Loader2 size={20} class="animate-spin" />
-          <span>$_("boot.envCheck")</span>
+      <Plus size={16} />
+    </button>
+  </nav>
+
+  {#if active}
+    <!-- Port config -->
+    <PortConfigPanel
+      config={active.config}
+      reconnect={active.reconnect}
+      ports={$ports}
+      connected={active.state === "connected"}
+      reconnecting={active.state === "reconnecting" || active.state === "connecting"}
+      onRefresh={refreshPorts}
+      onConnect={onConnect}
+      onDisconnect={onDisconnect}
+    />
+
+    <!-- Terminal + toolbar -->
+    <section class="relative flex flex-1 flex-col overflow-hidden">
+      <!-- Display controls strip -->
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-surface-border bg-surface-card/60 px-3 py-1 text-xs">
+        <label class="flex items-center gap-1">
+          <span class="text-gray-400">{$_("display.mode")}:</span>
+          <select
+            class="rounded border border-surface-border bg-surface px-1.5 py-0.5"
+            value={active.displayMode}
+            on:change={(e) => patchSession(active.id, { displayMode: e.currentTarget.value as "ascii" | "hex" | "ascii+hex" })}
+          >
+            <option value="ascii">{$_("display.ascii")}</option>
+            <option value="hex">{$_("display.hex")}</option>
+            <option value="ascii+hex">{$_("display.asciiHex")}</option>
+          </select>
+        </label>
+        <label class="flex items-center gap-1">
+          <span class="text-gray-400">{$_("display.timestamp")}:</span>
+          <select
+            class="rounded border border-surface-border bg-surface px-1.5 py-0.5"
+            value={active.timestamp}
+            on:change={(e) => patchSession(active.id, { timestamp: e.currentTarget.value as "off" | "absolute" | "relative" })}
+          >
+            <option value="off">{$_("display.tsOff")}</option>
+            <option value="absolute">{$_("display.tsAbsolute")}</option>
+            <option value="relative">{$_("display.tsRelative")}</option>
+          </select>
+        </label>
+        <label class="flex items-center gap-1">
+          <input
+            type="checkbox"
+            checked={active.colorParse}
+            on:change={(e) => patchSession(active.id, { colorParse: e.currentTarget.checked })}
+          />
+          <span class="text-gray-400">{$_("menu.colorParse")}</span>
+        </label>
+        <label class="flex items-center gap-1">
+          <input
+            type="checkbox"
+            checked={active.paused}
+            on:change={(e) => patchSession(active.id, { paused: e.currentTarget.checked })}
+          />
+          <span class="text-gray-400">{$_("common.pause")}</span>
+        </label>
+        <div class="flex-1"></div>
+        <label class="flex items-center gap-1">
+          <input type="checkbox" checked={active.logging} on:change={toggleLogging} />
+          <span class="text-gray-400">{$_("menu.log")}</span>
+        </label>
+        <div class="flex items-center gap-1">
+          <span class="text-gray-400">{$_("common.export")}:</span>
+          <button class="rounded bg-surface px-1.5 py-0.5 hover:bg-surface-hover" on:click={() => exportCurrent("txt")}>txt</button>
+          <button class="rounded bg-surface px-1.5 py-0.5 hover:bg-surface-hover" on:click={() => exportCurrent("csv")}>csv</button>
+          <button class="rounded bg-surface px-1.5 py-0.5 hover:bg-surface-hover" on:click={() => exportCurrent("hex")}>hex</button>
         </div>
-      {:else if error}
-        <div class="text-red-400">
-          <p class="font-semibold">IPC error</p>
-          <pre class="mt-2 whitespace-pre-wrap text-xs">{error}</pre>
+        <button
+          class="flex items-center gap-1 rounded bg-surface px-2 py-0.5 text-gray-300 hover:bg-surface-hover"
+          on:click={onClearTerminal}
+          title={$_("common.clear")}
+        >
+          <Eraser size={12} />
+          {$_("common.clear")}
+        </button>
+      </div>
+
+      {#key active.id}
+        <div class="min-h-0 flex-1">
+          <Terminal
+            bind:this={termRefs[active.id]}
+            sessionId={active.id}
+            paused={active.paused}
+            colorParse={active.colorParse}
+            displayMode={active.displayMode}
+            timestamp={active.timestamp}
+            onRxChunk={(ts, text) => handleRxChunk(active.id, ts, text)}
+          />
         </div>
-      {:else}
-        <div class="flex items-center gap-3 text-green-400">
-          <CheckCircle2 size={20} />
-          <span>$_("boot.envOk")</span>
-        </div>
-        <dl class="mt-6 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-          <dt class="text-gray-400">name</dt>
-          <dd class="font-mono">{info?.name}</dd>
-          <dt class="text-gray-400">version</dt>
-          <dd class="font-mono">{info?.version}</dd>
-          <dt class="text-gray-400">rustc</dt>
-          <dd class="font-mono">{info?.rustc}</dd>
-        </dl>
-      {/if}
+      {/key}
+    </section>
+
+    <!-- Send panel -->
+    <SendPanel
+      connected={active.state === "connected"}
+      history={active.history}
+      onSend={onSend}
+    />
+
+    <!-- Status bar -->
+    <StatusBar session={active} />
+  {:else}
+    <div class="flex flex-1 items-center justify-center text-gray-500">
+      <button
+        class="flex items-center gap-2 rounded-md bg-surface-card px-4 py-2 hover:bg-surface-hover"
+        on:click={() => newTab()}
+      >
+        <Plus size={16} />
+        {$_("common.newTab")}
+      </button>
     </div>
-  </section>
+  {/if}
 </main>
+
+<style>
+  nav::-webkit-scrollbar { height: 4px; }
+</style>

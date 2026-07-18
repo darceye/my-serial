@@ -5,8 +5,20 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "core:event:default",
     "fs:default",
-    "fs:allow-write-text-file",
+    {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [{ "path": "**" }]
+    },
+    {
+      "identifier": "fs:allow-mkdir",
+      "allow": [{ "path": "**" }]
+    },
+    {
+      "identifier": "fs:allow-exists",
+      "allow": [{ "path": "**" }]
+    },
     "dialog:default",
     "dialog:allow-save",
     "dialog:allow-open",

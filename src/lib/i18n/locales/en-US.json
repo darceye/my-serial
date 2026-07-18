@@ -1,7 +1,7 @@
 {
   "app": {
     "title": "MySerial Debug Tool",
-    "subtitle": "Phase 0 · Scaffold verification"
+    "subtitle": "Serial debug · color terminal · UTF-8 · auto-reconnect"
   },
   "common": {
     "ok": "OK",
@@ -11,21 +11,128 @@
     "send": "Send",
     "connect": "Connect",
     "disconnect": "Disconnect",
-    "refresh": "Refresh"
+    "refresh": "Refresh",
+    "open": "Open",
+    "save": "Save",
+    "delete": "Delete",
+    "add": "Add",
+    "edit": "Edit",
+    "rename": "Rename",
+    "newTab": "New Tab",
+    "search": "Search",
+    "export": "Export",
+    "copy": "Copy",
+    "selectAll": "Select All",
+    "pause": "Pause",
+    "resume": "Resume"
   },
   "status": {
     "connected": "Connected",
     "disconnected": "Disconnected",
     "reconnecting": "Reconnecting",
     "connecting": "Connecting",
-    "lost": "Connection lost"
+    "lost": "Connection lost",
+    "opening": "Opening…",
+    "closing": "Closing…",
+    "reconnectAttempts": "Reconnecting {n}/{max}",
+    "reconnectInfinite": "Reconnecting #{n}"
   },
   "menu": {
     "language": "Language",
-    "theme": "Theme"
+    "theme": "Theme",
+    "dark": "Dark",
+    "light": "Light",
+    "autoReconnect": "Auto-reconnect",
+    "colorParse": "Color parsing",
+    "log": "Log to file"
+  },
+  "config": {
+    "port": "Port",
+    "portPlaceholder": "Select or enter port",
+    "baudRate": "Baud rate",
+    "dataBits": "Data bits",
+    "parity": "Parity",
+    "stopBits": "Stop bits",
+    "flowControl": "Flow control",
+    "parityNone": "None",
+    "parityEven": "Even",
+    "parityOdd": "Odd",
+    "parityMark": "Mark",
+    "paritySpace": "Space",
+    "flowNone": "None",
+    "flowSoftware": "Software XON/XOFF",
+    "flowHardware": "Hardware RTS/CTS"
+  },
+  "display": {
+    "title": "Display",
+    "mode": "Mode",
+    "ascii": "ASCII",
+    "hex": "Hex",
+    "dec": "Dec",
+    "bin": "Bin",
+    "asciiHex": "ASCII+Hex",
+    "timestamp": "Timestamp",
+    "tsOff": "Off",
+    "tsAbsolute": "Absolute",
+    "tsRelative": "Relative",
+    "lineEnding": "Line ending",
+    "autoScroll": "Auto-scroll"
+  },
+  "send": {
+    "title": "Send",
+    "placeholder": "Enter data to send…",
+    "appendNewline": "Append newline",
+    "newlineNone": "None",
+    "newlineLF": "LF (\\n)",
+    "newlineCR": "CR (\\r)",
+    "newlineCRLF": "CRLF (\\r\\n)",
+    "hexMode": "Hex mode",
+    "hexHint": "e.g. 41 42 0A (space-separated bytes)",
+    "loop": "Loop send",
+    "loopInterval": "Interval (ms)",
+    "history": "History",
+    "macros": "Macros",
+    "macroName": "Name",
+    "macroContent": "Content"
+  },
+  "signal": {
+    "title": "Signals",
+    "output": "Output",
+    "input": "Input",
+    "rts": "RTS",
+    "dtr": "DTR",
+    "cts": "CTS",
+    "dsr": "DSR",
+    "cd": "CD",
+    "ri": "RI"
+  },
+  "stats": {
+    "title": "Statistics",
+    "rx": "RX",
+    "tx": "TX",
+    "rxRate": "RX rate",
+    "txRate": "TX rate",
+    "duration": "Duration",
+    "errors": "Errors",
+    "bytes": "bytes",
+    "bytesPerSec": "B/s"
   },
   "boot": {
     "envOk": "Environment ready: Rust backend ↔ web frontend IPC is working.",
-    "envCheck": "Verifying Tauri runtime…"
+    "envCheck": "Verifying Tauri runtime…",
+    "noPorts": "No serial devices detected",
+    "scanningPorts": "Scanning serial ports…"
+  },
+  "toast": {
+    "connected": "Connected to {port}",
+    "disconnected": "Disconnected from {port}",
+    "connectFailed": "Connect failed: {msg}",
+    "writeFailed": "Write failed: {msg}",
+    "portGone": "Port {port} has disappeared",
+    "reconnected": "Reconnected to {port}",
+    "reconnectLost": "Reconnect failed: max attempts reached",
+    "cleared": "Cleared",
+    "exported": "Exported to {path}",
+    "exportFailed": "Export failed: {msg}"
   }
 }

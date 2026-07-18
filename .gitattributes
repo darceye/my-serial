@@ -1,0 +1,11 @@
+# Normalize line endings: let Git store LF in the repo, check out native on each OS.
+* text=auto eol=lf
+
+# Binary files — never diff/merge as text
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.icns binary
+*.woff binary
+*.woff2 binary

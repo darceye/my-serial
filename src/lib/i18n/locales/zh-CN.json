@@ -1,7 +1,7 @@
 {
   "app": {
     "title": "MySerial 串口调试工具",
-    "subtitle": "阶段 0 · 脚手架验证"
+    "subtitle": "串口调试 · 彩色终端 · UTF-8 中文 · 自动重连"
   },
   "common": {
     "ok": "确定",
@@ -11,21 +11,128 @@
     "send": "发送",
     "connect": "连接",
     "disconnect": "断开",
-    "refresh": "刷新"
+    "refresh": "刷新",
+    "open": "打开",
+    "save": "保存",
+    "delete": "删除",
+    "add": "添加",
+    "edit": "编辑",
+    "rename": "重命名",
+    "newTab": "新标签",
+    "search": "搜索",
+    "export": "导出",
+    "copy": "复制",
+    "selectAll": "全选",
+    "pause": "暂停",
+    "resume": "继续"
   },
   "status": {
     "connected": "已连接",
     "disconnected": "未连接",
     "reconnecting": "重连中",
     "connecting": "连接中",
-    "lost": "连接丢失"
+    "lost": "连接丢失",
+    "opening": "打开中…",
+    "closing": "关闭中…",
+    "reconnectAttempts": "重连中 {n}/{max}",
+    "reconnectInfinite": "重连中 #{n}"
   },
   "menu": {
     "language": "语言",
-    "theme": "主题"
+    "theme": "主题",
+    "dark": "深色",
+    "light": "浅色",
+    "autoReconnect": "自动重连",
+    "colorParse": "彩色解析",
+    "log": "记录日志"
+  },
+  "config": {
+    "port": "端口",
+    "portPlaceholder": "选择或输入端口",
+    "baudRate": "波特率",
+    "dataBits": "数据位",
+    "parity": "校验位",
+    "stopBits": "停止位",
+    "flowControl": "流控",
+    "parityNone": "无",
+    "parityEven": "偶",
+    "parityOdd": "奇",
+    "parityMark": "Mark",
+    "paritySpace": "Space",
+    "flowNone": "无",
+    "flowSoftware": "软件 XON/XOFF",
+    "flowHardware": "硬件 RTS/CTS"
+  },
+  "display": {
+    "title": "显示",
+    "mode": "模式",
+    "ascii": "ASCII",
+    "hex": "Hex",
+    "dec": "Dec",
+    "bin": "Bin",
+    "asciiHex": "ASCII+Hex",
+    "timestamp": "时间戳",
+    "tsOff": "关闭",
+    "tsAbsolute": "绝对时间",
+    "tsRelative": "相对时间",
+    "lineEnding": "换行",
+    "autoScroll": "自动滚动"
+  },
+  "send": {
+    "title": "发送",
+    "placeholder": "输入要发送的内容…",
+    "appendNewline": "追加换行",
+    "newlineNone": "无",
+    "newlineLF": "LF (\\n)",
+    "newlineCR": "CR (\\r)",
+    "newlineCRLF": "CRLF (\\r\\n)",
+    "hexMode": "Hex 模式",
+    "hexHint": "如：41 42 0A（空格分隔的字节）",
+    "loop": "循环发送",
+    "loopInterval": "间隔(ms)",
+    "history": "历史",
+    "macros": "宏",
+    "macroName": "名称",
+    "macroContent": "内容"
+  },
+  "signal": {
+    "title": "信号",
+    "output": "输出",
+    "input": "输入",
+    "rts": "RTS",
+    "dtr": "DTR",
+    "cts": "CTS",
+    "dsr": "DSR",
+    "cd": "CD",
+    "ri": "RI"
+  },
+  "stats": {
+    "title": "统计",
+    "rx": "接收",
+    "tx": "发送",
+    "rxRate": "RX 速率",
+    "txRate": "TX 速率",
+    "duration": "会话时长",
+    "errors": "错误",
+    "bytes": "字节",
+    "bytesPerSec": "B/s"
   },
   "boot": {
     "envOk": "环境就绪：Rust 后端与 Web 前端通信正常。",
-    "envCheck": "正在验证 Tauri 运行时…"
+    "envCheck": "正在验证 Tauri 运行时…",
+    "noPorts": "未检测到串口设备",
+    "scanningPorts": "正在扫描串口…"
+  },
+  "toast": {
+    "connected": "已连接到 {port}",
+    "disconnected": "已断开 {port}",
+    "connectFailed": "连接失败：{msg}",
+    "writeFailed": "发送失败：{msg}",
+    "portGone": "端口 {port} 已消失",
+    "reconnected": "已重新连接到 {port}",
+    "reconnectLost": "重连失败，已达最大次数",
+    "cleared": "已清空",
+    "exported": "已导出到 {path}",
+    "exportFailed": "导出失败：{msg}"
   }
 }
