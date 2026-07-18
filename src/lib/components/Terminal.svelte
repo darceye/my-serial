@@ -227,17 +227,29 @@
       term.write("\n\x1b[33m―― 已重新连接 / reconnected ――\x1b[0m\n");
     });
 
-    // Refit on container resize, debounced.
+    // Refit on container resize, debounced. We track the last measured size and
+    // only refit when it actually changed, so internal xterm DOM mutations
+    // (which don't affect the absolute-positioned container) can't cause
+    // fit/write races that mis-size the terminal.
     let resizeTimer: ReturnType<typeof setTimeout> | null = null;
-    ro = new ResizeObserver(() => {
-      if (resizeTimer) clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => {
-        try {
-          fit.fit();
-        } catch {
-          /* terminal not yet ready */
-        }
-      }, 50);
+    let lastW = 0;
+    let lastH = 0;
+    ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const w = Math.round(entry.contentRect.width);
+        const h = Math.round(entry.contentRect.height);
+        if (w === lastW && h === lastH) continue;
+        lastW = w;
+        lastH = h;
+        if (resizeTimer) clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+          try {
+            fit.fit();
+          } catch {
+            /* terminal not yet ready */
+          }
+        }, 50);
+      }
     });
     ro.observe(container);
 
@@ -299,15 +311,17 @@
     position: absolute;
     inset: 0;
     overflow: hidden;
-    /* Small inset so text isn't flush against the border. Applied here on
-       the container (not on .xterm) so FitAddon measures the full box and
-       xterm's internal layout matches the measured dimensions. */
-    padding: 4px 6px;
-    box-sizing: border-box;
+    /* NO padding anywhere on or inside .terminal-container. xterm's FitAddon
+       measures clientWidth/clientHeight and divides by cell size to get rows
+       and cols. Any padding (on this box or on .xterm) introduces a mismatch
+       between measured size and actual render area, which produces phantom
+       scroll-area height and mis-sized rows. Keep it zero-padding. */
   }
-  :global(.xterm) {
-    height: 100%;
-    /* NO padding here — padding on .xterm breaks FitAddon's row-count math. */
+  :global(.xterm),
+  :global(.xterm-screen),
+  :global(.xterm-rows),
+  :global(.xterm-viewport) {
+    padding: 0 !important;
   }
   :global(.xterm-viewport) {
     overflow-y: auto;
