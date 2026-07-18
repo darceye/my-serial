@@ -1,0 +1,31 @@
+{
+  "app": {
+    "title": "MySerial Debug Tool",
+    "subtitle": "Phase 0 · Scaffold verification"
+  },
+  "common": {
+    "ok": "OK",
+    "cancel": "Cancel",
+    "close": "Close",
+    "clear": "Clear",
+    "send": "Send",
+    "connect": "Connect",
+    "disconnect": "Disconnect",
+    "refresh": "Refresh"
+  },
+  "status": {
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "reconnecting": "Reconnecting",
+    "connecting": "Connecting",
+    "lost": "Connection lost"
+  },
+  "menu": {
+    "language": "Language",
+    "theme": "Theme"
+  },
+  "boot": {
+    "envOk": "Environment ready: Rust backend ↔ web frontend IPC is working.",
+    "envCheck": "Verifying Tauri runtime…"
+  }
+}

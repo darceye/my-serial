@@ -1,0 +1,31 @@
+{
+  "app": {
+    "title": "MySerial 串口调试工具",
+    "subtitle": "阶段 0 · 脚手架验证"
+  },
+  "common": {
+    "ok": "确定",
+    "cancel": "取消",
+    "close": "关闭",
+    "clear": "清空",
+    "send": "发送",
+    "connect": "连接",
+    "disconnect": "断开",
+    "refresh": "刷新"
+  },
+  "status": {
+    "connected": "已连接",
+    "disconnected": "未连接",
+    "reconnecting": "重连中",
+    "connecting": "连接中",
+    "lost": "连接丢失"
+  },
+  "menu": {
+    "language": "语言",
+    "theme": "主题"
+  },
+  "boot": {
+    "envOk": "环境就绪：Rust 后端与 Web 前端通信正常。",
+    "envCheck": "正在验证 Tauri 运行时…"
+  }
+}

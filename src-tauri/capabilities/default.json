@@ -1,0 +1,15 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Default capability set for MySerial main window.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "fs:default",
+    "fs:allow-write-text-file",
+    "dialog:default",
+    "dialog:allow-save",
+    "dialog:allow-open",
+    "store:default"
+  ]
+}
