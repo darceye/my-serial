@@ -10,6 +10,13 @@ import type { SessionState } from "$lib/tauri/events";
 import type { DataChunk, ChunkDir } from "$lib/services/rx-buffer";
 import type { CharBreak } from "$lib/services/line-slice";
 
+/** One entry in the send history: the original user text + the mode it was
+ *  typed in, so re-selecting it restores both. */
+export interface HistoryEntry {
+  text: string;
+  mode: "ascii" | "hex";
+}
+
 /** One tab's UI-side state. */
 export interface TabSession {
   id: string;
@@ -27,8 +34,10 @@ export interface TabSession {
   txRate: number;
   connectedAt: number | null;
   errors: number;
-  /** Pre-typed send history (most-recent-first). */
-  history: string[];
+  /** Pre-typed send history (most-recent-first). Each entry remembers the
+   *  mode the user typed it in (ascii | hex) so clicking it restores both
+   *  the text and the mode, avoiding hex/ascii mis-parsing on resend. */
+  history: HistoryEntry[];
   /** Pause scrolling the terminal (display-only concern, but kept here so it
    * survives re-renders and is per-tab). */
   paused: boolean;
@@ -170,11 +179,17 @@ export function addRxBytes(id: string, n: number) {
   });
 }
 
-export function pushHistory(id: string, text: string) {
+/** Max send-history entries kept per tab. */
+export const HISTORY_MAX = 100;
+
+/** Push a send-history entry. Dedupes on (text, mode) pair so the same payload
+ *  in the same mode bubbles to the top instead of duplicating. */
+export function pushHistory(id: string, text: string, mode: "ascii" | "hex") {
   sessions.update((s) => {
     if (!s[id]) return s;
     const cur = s[id];
-    const next = [text, ...cur.history.filter((h) => h !== text)].slice(0, 20);
+    const entry: HistoryEntry = { text, mode };
+    const next = [entry, ...cur.history.filter((h) => !(h.text === text && h.mode === mode))].slice(0, HISTORY_MAX);
     return { ...s, [id]: { ...cur, history: next } };
   });
 }

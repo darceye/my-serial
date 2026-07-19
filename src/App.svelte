@@ -164,9 +164,12 @@
     try { await closePort(sid); } catch (e) { console.error(e); }
   }
 
-  async function onSend(bytes: number[]) {
+  /** Send payload: bytes already-encoded (incl. appended suffix). `text` is the
+   *  raw user input (for history) and `mode` is the input mode it was typed in. */
+  async function onSend(payload: { bytes: number[]; text: string; mode: "ascii" | "hex" }) {
     const sid = $activeSessionId;
     if (!sid) return;
+    const { bytes, text, mode } = payload;
     try {
       await writeData(sid, bytes);
       addTxBytes(sid, bytes.length);
@@ -175,7 +178,9 @@
       // Echo sent bytes into the output view — the native renderer colors
       // tx chunks via its dir-tx class, no ANSI wrapping needed.
       termRefs[sid]?.writeText(decoded);
-      if (bytes.length > 0) pushHistory(sid, decoded.replace(/[\r\n]+$/, ""));
+      // History stores the ORIGINAL typed text + mode, so re-selecting it
+      // restores both without ascii/hex mis-parsing.
+      if (bytes.length > 0 && text.trim()) pushHistory(sid, text, mode);
       // Record for export + optional file logging. Use send time as ts.
       const now = Date.now();
       recordChunk(sid, "tx", byteArr, decoded, now);

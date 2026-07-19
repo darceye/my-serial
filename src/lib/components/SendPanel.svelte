@@ -1,23 +1,59 @@
 <script lang="ts">
   import { _ } from "svelte-i18n";
   import { Send, History, Repeat, Hexagon } from "@lucide/svelte";
+  import type { HistoryEntry } from "$lib/stores/session";
+  import { parseCustomBreakLine } from "$lib/services/line-slice";
 
   export let connected: boolean;
-  export let history: string[];
-  /** Called with the byte array to transmit. */
-  export let onSend: (bytes: number[]) => void;
+  export let history: HistoryEntry[];
+  /** Called with the byte array to transmit + the raw text + mode (for history). */
+  export let onSend: (payload: { bytes: number[]; text: string; mode: "ascii" | "hex" }) => void;
 
+  /** Input box contents (raw user text, before parsing). */
   let text = "";
-  let appendNewline = true;
-  let newline: "none" | "\n" | "\r" | "\r\n" = "\r\n";
-  let hexMode = false;
+  /** Whether to append a suffix after the payload. */
+  let appendSuffix = true;
+  /** Which preset suffix to append, or "custom" for a user-defined sequence. */
+  let suffixKind: "none" | "cr" | "lf" | "space" | "etx" | "nul" | "custom" = "lf";
+  let suffixCustomAscii = true;
+  let suffixCustomInput = "";
+  /** Input mode: ascii text or hex bytes. */
+  let mode: "ascii" | "hex" = "ascii";
   let loopSend = false;
   let loopInterval = 1000;
   let loopTimer: ReturnType<typeof setInterval> | null = null;
 
+  // Re-export `mode` as `hexMode` alias for template readability.
+  $: hexMode = mode === "hex";
+
+  /** Decode the suffix selection into the byte sequence to append. */
+  function suffixBytes(): number[] {
+    if (!appendSuffix) return [];
+    switch (suffixKind) {
+      case "none": return [];
+      case "cr": return [0x0d];
+      case "lf": return [0x0a];
+      case "space": return [0x20];
+      case "etx": return [0x03];
+      case "nul": return [0x00];
+      case "custom": {
+        if (!suffixCustomInput.trim()) return [];
+        const seq = parseCustomBreakLine(
+          suffixCustomInput,
+          suffixCustomAscii ? "ascii" : "hex",
+        );
+        return Array.from(seq);
+      }
+      // Legacy preset value — default selection; map below.
+      default: return [];
+    }
+  }
+
+  /** Parse the input box contents into a byte array, or null if invalid. */
   function parseInput(input: string): number[] | null {
     if (hexMode) {
-      // Accept "41 42 0A" or "0x41,0x42". Tolerate spaces/commas.
+      // Tokens are space-separated hex pairs (auto-spaced by the input filter).
+      // Also tolerate commas / missing spaces for pasted content.
       const tokens = input.split(/[\s,]+/).filter(Boolean);
       const bytes: number[] = [];
       for (const t of tokens) {
@@ -32,17 +68,11 @@
     return Array.from(enc.encode(input));
   }
 
-  function appendEol(bytes: number[]): number[] {
-    if (!appendNewline) return bytes;
-    const eol = newline === "none" ? "" : newline;
-    return [...bytes, ...Array.from(eol).map((c) => c.charCodeAt(0))];
-  }
-
   function doSend() {
     const parsed = parseInput(text);
     if (!parsed || parsed.length === 0) return;
-    const bytes = appendEol(parsed);
-    onSend(bytes);
+    const bytes = [...parsed, ...suffixBytes()];
+    onSend({ bytes, text, mode });
   }
 
   function sendNow() {
@@ -64,9 +94,58 @@
     }
   }
 
-  function resend(item: string) {
-    text = item;
-    sendNow();
+  /** Click a history entry: restore both text and mode. Does NOT auto-send —
+   *  the user reviews then clicks Send. */
+  function recall(item: HistoryEntry) {
+    text = item.text;
+    mode = item.mode;
+  }
+
+  /** Normalize hex input: strip every non-hex char, then group into pairs
+   *  separated by single spaces ("41420a" / "41 42 0a"). */
+  function normalizeHex(raw: string): string {
+    const cleaned = raw.replace(/[^0-9a-fA-F]/g, "");
+    // If there's an odd nibble, keep it so the user can finish typing; the
+    // trailing single nibble won't parse but the visible pair grouping still
+    // makes intent obvious.
+    const pairs: string[] = [];
+    for (let i = 0; i < cleaned.length; i += 2) {
+      pairs.push(cleaned.slice(i, i + 2));
+    }
+    return pairs.join(" ");
+  }
+
+  /** Intercept keystrokes in hex mode: only allow hex chars, spaces, backspace,
+   *  arrows, etc. Let the input event normalize the value afterwards. */
+  function onHexKeyDown(e: KeyboardEvent) {
+    // Always allow: backspace, delete, arrows, home/end, tab, enter, modifiers.
+    const allowed =
+      e.ctrlKey || e.metaKey || e.altKey ||
+      ["Backspace", "Delete", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown",
+       "Home", "End", "Tab", "Enter"].includes(e.key);
+    if (allowed) return;
+    // Allow a single hex nibble or an existing space.
+    if (/^[0-9a-fA-F]$/.test(e.key)) return;
+    if (e.key === " ") return;
+    // Block everything else.
+    e.preventDefault();
+  }
+
+  /** After any input change in hex mode, re-normalize spacing. */
+  function onHexInput(e: Event) {
+    const ta = e.currentTarget as HTMLTextAreaElement;
+    const normalized = normalizeHex(ta.value);
+    if (normalized !== ta.value) {
+      // Preserve caret position relative to the end (common for auto-format).
+      const tail = ta.value.length - ta.selectionStart;
+      text = normalized;
+      // Restore caret in a microtask after Svelte updates the binding.
+      queueMicrotask(() => {
+        ta.selectionStart = ta.selectionEnd = Math.max(0, normalized.length - tail);
+      });
+    } else {
+      text = normalized;
+    }
   }
 
   $: if (!connected && loopSend) {
@@ -89,31 +168,51 @@
   <textarea style="width:100%;"
     bind:value={text}
     on:keydown={(e) => {
+      if (hexMode) onHexKeyDown(e);
       // Ctrl+Enter or Enter (when not multiline) sends.
       if ((e.ctrlKey && e.key === "Enter") || (e.key === "Enter" && !e.shiftKey && !loopSend)) {
         e.preventDefault();
         sendNow();
       }
     }}
+    on:input={(e) => { if (hexMode) onHexInput(e); }}
     placeholder={hexMode ? $_("send.hexHint") : $_("send.placeholder")}
     rows="2"
+    spellcheck="false"
+    autocomplete="off"
+    autocapitalize="off"
     class="w-full resize-y rounded border border-surface-border bg-surface px-2 py-1.5 font-mono text-sm focus:border-accent focus:outline-none"
   ></textarea>
 
   <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
     <label class="flex items-center gap-1.5">
-      <input type="checkbox" bind:checked={appendNewline} />
-      {$_("send.appendNewline")}
+      <input type="checkbox" bind:checked={appendSuffix} />
+      {$_("send.appendChar")}
     </label>
-    <select bind:value={newline} disabled={!appendNewline} class="rounded border border-surface-border bg-surface px-1.5 py-0.5">
-      <option value={"none"}>{$_("send.newlineNone")}</option>
-      <option value={"\n"}>{$_("send.newlineLF")}</option>
-      <option value={"\r"}>{$_("send.newlineCR")}</option>
-      <option value={"\r\n"}>{$_("send.newlineCRLF")}</option>
+    <select bind:value={suffixKind} disabled={!appendSuffix} class="rounded border border-surface-border bg-surface px-1.5 py-0.5">
+      <option value={"none"}>{$_("send.suffixNone")}</option>
+      <option value={"cr"}>{$_("send.suffixCR")}</option>
+      <option value={"lf"}>{$_("send.suffixLF")}</option>
+      <option value={"space"}>{$_("send.suffixSpace")}</option>
+      <option value={"etx"}>{$_("send.suffixETX")}</option>
+      <option value={"nul"}>{$_("send.suffixNUL")}</option>
+      <option value={"custom"}>{$_("send.suffixCustom")}</option>
     </select>
+    {#if suffixKind === "custom" && appendSuffix}
+      <select bind:value={suffixCustomAscii} class="rounded border border-surface-border bg-surface px-1 py-0.5" title={$_("send.customFormat")}>
+        <option value={true}>{$_("send.customAscii")}</option>
+        <option value={false}>{$_("send.customHex")}</option>
+      </select>
+      <input
+        type="text"
+        bind:value={suffixCustomInput}
+        placeholder={suffixCustomAscii ? $_("send.suffixCustomPhAscii") : $_("send.suffixCustomPhHex")}
+        class="w-36 rounded border border-surface-border bg-surface px-1.5 py-0.5 font-mono"
+      />
+    {/if}
 
     <label class="flex items-center gap-1.5" title={$_("send.hexHint")}>
-      <input type="checkbox" bind:checked={hexMode} />
+      <input type="checkbox" checked={hexMode} on:change={() => { mode = hexMode ? "ascii" : "hex"; if (hexMode) text = normalizeHex(text); }} />
       <Hexagon size={13} />
       {$_("send.hexMode")}
     </label>
@@ -149,15 +248,15 @@
     <div class="flex items-start gap-2 pt-1">
       <History size={13} class="mt-0.5 shrink-0 text-gray-500" />
       <div class="flex flex-wrap gap-1.5">
-        {#each history as item, i (item + i)}
+        {#each history as item, i (`${item.mode}:${item.text}:${i}`)}
           <button
             type="button"
-            on:click={() => resend(item)}
-            disabled={!connected}
-            class="max-w-[200px] truncate rounded border border-surface-border bg-surface px-2 py-0.5 font-mono text-xs hover:bg-surface-hover disabled:opacity-40"
-            title={item}
+            on:click={() => recall(item)}
+            class="flex max-w-[240px] items-center gap-1 rounded border border-surface-border bg-surface px-2 py-0.5 font-mono text-xs hover:bg-surface-hover"
+            title={item.text}
           >
-            {item}
+            <span class="rounded bg-surface-hover px-1 text-[10px] uppercase text-gray-400">{item.mode === "hex" ? "HEX" : "ASC"}</span>
+            <span class="truncate">{item.text}</span>
           </button>
         {/each}
       </div>
