@@ -19,9 +19,8 @@
     --c-fg-soft:        #9ca3af;   /* ~ text-gray-400 */
     --c-fg-mute:        #6b7280;   /* ~ text-gray-500 */
     --c-fg-on:          #ffffff;   /* text on accent surface */
-
-    --terminal-bg: #1e1e1e;
-    --terminal-fg: #cccccc;
+    --c-terminal-bg:    #1e1e1e;   /* output pane — slightly darker than panels */
+    --c-terminal-fg:    #cccccc;
   }
   html.light {
     --c-surface:        #ffffff;
@@ -34,9 +33,8 @@
     --c-fg-soft:        #5a5a5a;
     --c-fg-mute:        #7a7a7a;
     --c-fg-on:          #ffffff;
-
-    --terminal-bg: #ffffff;
-    --terminal-fg: #1e1e1e;
+    --c-terminal-bg:    #ffffff;
+    --c-terminal-fg:    #1e1e1e;
   }
 }
 

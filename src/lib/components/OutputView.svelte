@@ -450,12 +450,12 @@
     inset: 0;
     display: flex;
     flex-direction: column;
-    background: var(--output-bg, #1e1e1e);
-    color: var(--output-fg, #cccccc);
-  }
-  :global(.light) .output-root {
-    --output-bg: #ffffff;
-    --output-fg: #1e1e1e;
+    /* Theme colors come from the global --c-terminal-* tokens (defined on
+       :root and flipped under html.light in src/styles/app.css), so the
+       output pane switches theme together with the rest of the window —
+       no separate fallback chain that could desync from the toggle. */
+    background: var(--c-terminal-bg);
+    color: var(--c-terminal-fg);
   }
 
   /* Byte-offset ruler (hex modes only). */
