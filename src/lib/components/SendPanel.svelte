@@ -115,6 +115,33 @@
     return pairs.join(" ");
   }
 
+  /** Toggle between ascii and hex modes, converting the current input box
+   *  contents to the new mode so nothing is lost on the switch:
+   *  - ascii → hex: UTF-8 encode the text, render each byte as 2 hex digits
+   *    separated by spaces.
+   *  - hex → ascii: parse the hex pairs to bytes, UTF-8 decode, then strip
+   *    non-printable characters (control bytes < 0x20 except \t, and DEL).
+   *    Bytes that don't form valid UTF-8 are dropped. */
+  function toggleMode() {
+    if (mode === "ascii") {
+      const utf8 = Array.from(new TextEncoder().encode(text));
+      text = utf8.map((b) => b.toString(16).padStart(2, "0").toUpperCase()).join(" ");
+      mode = "hex";
+    } else {
+      // hex → ascii
+      const tokens = text.split(/[\s,]+/).filter(Boolean);
+      const bytes: number[] = [];
+      for (const t of tokens) {
+        const n = parseInt(t.replace(/^0x/i, ""), 16);
+        if (!Number.isNaN(n) && n >= 0 && n <= 255) bytes.push(n);
+      }
+      const decoded = new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(bytes));
+      // Keep only printable characters (and tab); drop control bytes & DEL.
+      text = decoded.replace(/[^\x20-\x7E\t]/g, "");
+      mode = "ascii";
+    }
+  }
+
   /** Intercept keystrokes in hex mode: only allow hex chars, spaces, backspace,
    *  arrows, etc. Let the input event normalize the value afterwards. */
   function onHexKeyDown(e: KeyboardEvent) {
@@ -212,7 +239,7 @@
     {/if}
 
     <label class="flex items-center gap-1.5" title={$_("send.hexHint")}>
-      <input type="checkbox" checked={hexMode} on:change={() => { mode = hexMode ? "ascii" : "hex"; if (hexMode) text = normalizeHex(text); }} />
+      <input type="checkbox" checked={hexMode} on:change={toggleMode} />
       <Hexagon size={13} />
       {$_("send.hexMode")}
     </label>
