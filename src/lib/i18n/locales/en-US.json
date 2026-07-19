@@ -50,6 +50,7 @@
     "port": "Port",
     "portPlaceholder": "Select or enter port",
     "baudRate": "Baud rate",
+    "baudPresets": "Pick a preset",
     "dataBits": "Data bits",
     "parity": "Parity",
     "stopBits": "Stop bits",

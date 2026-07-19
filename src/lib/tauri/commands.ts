@@ -63,9 +63,10 @@ export const DEFAULT_RECONNECT: ReconnectConfig = {
   on_port_gone: "prompt",
 };
 
-/** Common baud rate presets for the dropdown. */
+/** Common baud rate presets for the dropdown. 74880 is the ESP8266 boot-log
+ *  baud rate. */
 export const BAUD_PRESETS = [
-  9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600,
+  9600, 19200, 38400, 57600, 74880, 115200, 230400, 460800, 921600,
 ];
 
 export async function getAppInfo(): Promise<AppInfo> {

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
+  import { get } from "svelte/store";
   import { _ } from "svelte-i18n";
   import { locale } from "$lib/i18n";
   import {
@@ -92,11 +93,21 @@
   async function subscribeSession(sid: string) {
     sessionUnsubs[sid] = [
       await onStatus(sid, (p) => {
+        // Tab label reflects the connection: COM port name while connected,
+        // "Disconnected" otherwise.
+        const cur = get(sessions)[sid];
+        const portName = cur?.config.port_name ?? "";
+        const title = p.state === "connected" && portName
+          ? portName
+          : p.state === "connected"
+            ? cur?.title ?? `Tab ${sid.slice(-4)}`
+            : $_("status.disconnected");
         patchSession(sid, {
           state: p.state,
           attempts: p.attempts ?? 0,
           maxAttempts: p.max_attempts ?? 0,
           connectedAt: p.state === "connected" ? Date.now() : null,
+          title,
         });
       }),
       await onSignal(sid, (p) => {

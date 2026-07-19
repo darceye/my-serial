@@ -19,6 +19,18 @@
     if (p.vid) bits.push(`${p.vid}:${p.pid}`);
     return bits.join(" — ");
   }
+
+  // The preset <select> is uncontrolled: it stays on its placeholder so the
+  // dropdown always lists every preset. Selecting one writes through to
+  // config.baud_rate and snaps back to the placeholder, leaving the text
+  // input free for custom rates (a <datalist> would filter options by the
+  // typed text, which prevented switching back to other presets).
+  let baudPreset = "";
+  function applyBaudPreset(e: Event) {
+    const v = Number((e.currentTarget as HTMLSelectElement).value);
+    if (v > 0) config.baud_rate = v;
+    baudPreset = "";
+  }
 </script>
 
 <div class="flex flex-shrink-0 flex-wrap items-end gap-x-4 gap-y-2 border-b border-surface-border p-3">
@@ -49,19 +61,40 @@
     <RefreshCw size={14} />
   </button>
 
-  <!-- Baud rate -->
+  <!-- Baud rate: free-text input for custom rates + an adjacent preset
+       dropdown that always lists every preset (no live filtering, so any
+       preset can be picked at any time regardless of what's typed).
+       The caret <div> is purely visual; a transparent <select> overlays it
+       to capture the click and pop the native picker. The <select> itself
+       is never visible, so the chosen value can't bleed into the layout —
+       on change we snap it back to the empty placeholder, which means the
+       dropdown reopens with the full list every time. -->
   <label class="flex flex-col gap-1">
     <span class="text-xs text-gray-400">{$_("config.baudRate")}</span>
-    <input
-      type="number"
-      list="baud-presets"
-      bind:value={config.baud_rate}
-      disabled={connected || reconnecting}
-      class="w-24 rounded border border-surface-border bg-surface px-2 py-1.5 text-sm disabled:opacity-50"
-    />
-    <datalist id="baud-presets">
-      {#each BAUD_PRESETS as b}<option value={b}></option>{/each}
-    </datalist>
+    <div class="flex">
+      <input
+        type="number"
+        bind:value={config.baud_rate}
+        disabled={connected || reconnecting}
+        class="baud-input w-24 rounded-l border border-r-0 border-surface-border bg-surface px-2 py-1.5 text-sm tabular-nums disabled:opacity-50"
+      />
+      <div
+        class="relative flex items-center rounded-r border border-surface-border bg-surface px-2 py-1.5 text-xs text-gray-400"
+        class:opacity-50={connected || reconnecting}
+      >
+        <span aria-hidden="true">▾</span>
+        <select
+          value={baudPreset}
+          on:change={applyBaudPreset}
+          disabled={connected || reconnecting}
+          title={$_("config.baudPresets")}
+          class="absolute inset-0 cursor-pointer border-0 bg-transparent p-0 text-xs opacity-0"
+        >
+          <option value=""></option>
+          {#each BAUD_PRESETS as b}<option value={b}>{b}</option>{/each}
+        </select>
+      </div>
+    </div>
   </label>
 
   <!-- Data bits -->
@@ -176,3 +209,16 @@
     {/if}
   </div>
 </div>
+
+<style>
+  /* Hide the native +/- spinner buttons on the baud-rate number input. */
+  .baud-input::-webkit-inner-spin-button,
+  .baud-input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .baud-input {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+</style>

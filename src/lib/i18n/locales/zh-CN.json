@@ -50,6 +50,7 @@
     "port": "端口",
     "portPlaceholder": "选择或输入端口",
     "baudRate": "波特率",
+    "baudPresets": "选择预设波特率",
     "dataBits": "数据位",
     "parity": "校验位",
     "stopBits": "停止位",
