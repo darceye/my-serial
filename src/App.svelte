@@ -22,6 +22,7 @@
     createTabRecord,
     patchSession,
     addTxBytes,
+    addRxBytes,
     pushHistory,
     recordChunk,
   } from "$lib/stores/session";
@@ -197,6 +198,8 @@
   function handleRxChunk(sid: string, ts: number, text: string) {
     const bytes = new TextEncoder().encode(text);
     recordChunk(sid, "rx", bytes, text, ts);
+    // Bump the RX byte counter for the status bar.
+    addRxBytes(sid, bytes.length);
     const s = $sessions[sid];
     if (s?.logging) {
       appendLog(sid, { ts, dir: "rx", text });

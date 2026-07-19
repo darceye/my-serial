@@ -188,6 +188,37 @@ test("slice hex — newlines in content ignored", () => {
   eq(rows[0].bytes.length, 3, "3 bytes");
 });
 
+// === sliceIntoRows (ascii+hex mode) ===
+// ascii+hex shares the 16-byte-row slicer with pure hex, but must also fill
+// row.text for the ascii line and preserve ALL bytes (including \r \n).
+
+test("slice ascii+hex — uses 16-byte rows like hex mode", () => {
+  // 20 bytes → 2 rows (16 + 4)
+  const arr = Array.from({ length: 20 }, (_, i) => i);
+  const chunks = [mkChunk(1000, "rx", arr, 0, "")];
+  const rows = sliceIntoRows(chunks, "ascii+hex");
+  eq(rows.length, 2, "2 rows");
+  eq(rows[0].bytes.length, 16, "row 0 = 16 bytes");
+  eq(rows[0].mode, "ascii+hex", "mode tag");
+});
+
+test("slice ascii+hex — preserves \\r\\n bytes (shows 0d 0a in hex)", () => {
+  // "Hi\r\n" = 48 69 0d 0a — all 4 bytes must appear in row.bytes
+  const chunks = [mkChunk(1000, "rx", [0x48, 0x69, 0x0d, 0x0a], 0, "Hi\r\n")];
+  const rows = sliceIntoRows(chunks, "ascii+hex");
+  eq(rows.length, 1, "1 row");
+  eq(rows[0].bytes.length, 4, "all 4 bytes preserved");
+  eq(rows[0].bytes[2], 0x0d, "byte 2 = 0x0d (CR)");
+  eq(rows[0].bytes[3], 0x0a, "byte 3 = 0x0a (LF)");
+});
+
+test("slice ascii+hex — row.text is decoded for ascii line rendering", () => {
+  // ascii+hex rows need text populated so the ascii row can render.
+  const chunks = [mkChunk(1000, "rx", [0x41, 0x42, 0x43], 0, "ABC")];
+  const rows = sliceIntoRows(chunks, "ascii+hex");
+  eq(rows[0].text, "ABC", "text decoded");
+});
+
 // === time formatting ===
 
 test("formatAbsoluteTime — HH:MM:SS.mmm", () => {

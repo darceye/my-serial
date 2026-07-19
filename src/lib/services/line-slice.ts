@@ -50,23 +50,28 @@ export const HEX_BYTES_PER_ROW = 16;
 /**
  * Slice chunks into rows according to the display mode.
  *
- * For ascii/ascii+hex: splits on \n across chunk boundaries. A \r\n pair is
- * treated as a single line break (the \r is stripped from the row text but
- * kept in bytes for fidelity). Bare \r is also a line break (some devices
- * use it instead of \n).
+ * ascii: splits on \n (and standalone \r) across chunk boundaries. Control
+ * bytes are NOT included in row.bytes — the row is the visible text content.
+ * A trailing partial line is kept so streaming data shows immediately.
  *
- * For hex: ignores content newlines, just chunks bytes into 16-byte rows.
+ * hex / ascii+hex: fixed-width 16-byte rows, ignoring content newlines
+ * (traditional hex-dump width, like xxd/hexdump). ALL bytes are preserved
+ * including \r/\n, so the hex view shows them as 0d 0a and the ascii row
+ * stays perfectly aligned under the hex bytes.
  */
 export function sliceIntoRows(
   chunks: DataChunk[],
   mode: "ascii" | "hex" | "ascii+hex",
 ): Row[] {
-  if (mode === "hex") return sliceHexRows(chunks);
-  return sliceAsciiRows(chunks, mode);
+  if (mode === "ascii") return sliceAsciiRows(chunks);
+  return sliceHexRows(chunks, mode);
 }
 
-/** Hex mode: 16-byte rows, ignoring line content. */
-function sliceHexRows(chunks: DataChunk[]): Row[] {
+/** Hex / ascii+hex mode: 16-byte rows, ignoring content newlines.
+ *  All bytes (including \r, \n) are preserved in row.bytes so the hex view
+ *  shows control characters. row.mode reflects the caller's mode so the
+ *  renderer knows whether to also draw the ascii line. */
+function sliceHexRows(chunks: DataChunk[], mode: "hex" | "ascii+hex"): Row[] {
   const rows: Row[] = [];
   let buffer: number[] = [];
   let rowStartOffset = 0;
@@ -74,15 +79,17 @@ function sliceHexRows(chunks: DataChunk[]): Row[] {
   let rowTs = 0;
   let started = false;
 
-  const flush = (final: boolean) => {
-    if (buffer.length === 0 && !final) return;
+  const flush = () => {
     if (buffer.length === 0) return;
     const bytes = new Uint8Array(buffer);
+    // Decode for the ascii row. Use lossy decode so stray bytes don't crash;
+    // the ascii renderer replaces non-printables with "." anyway.
+    const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
     rows.push({
-      mode: "hex",
+      mode,
       startOffset: rowStartOffset,
       bytes,
-      text: "",
+      text,
       dir: rowDir,
       ts: rowTs,
       partial: false,
@@ -95,10 +102,10 @@ function sliceHexRows(chunks: DataChunk[]): Row[] {
     if (chunk.dir === "system") {
       // System markers (reconnect divider): flush current hex row, then emit
       // the marker as its own text-only row.
-      flush(true);
+      flush();
       if (chunk.text) {
         rows.push({
-          mode: "hex",
+          mode,
           startOffset: chunk.offset,
           bytes: new Uint8Array(0),
           text: chunk.text,
@@ -117,18 +124,15 @@ function sliceHexRows(chunks: DataChunk[]): Row[] {
         started = true;
       }
       buffer.push(chunk.bytes[i]);
-      if (buffer.length >= HEX_BYTES_PER_ROW) flush(false);
+      if (buffer.length >= HEX_BYTES_PER_ROW) flush();
     }
   }
-  flush(true);
+  flush();
   return rows;
 }
 
-/** Ascii / ascii+hex mode: split on line boundaries across chunks. */
-function sliceAsciiRows(
-  chunks: DataChunk[],
-  mode: "ascii" | "ascii+hex",
-): Row[] {
+/** Ascii mode: split on line boundaries across chunks. */
+function sliceAsciiRows(chunks: DataChunk[]): Row[] {
   const rows: Row[] = [];
   // Pending row state — accumulates across chunks until a newline arrives.
   let pendingBytes: number[] = [];
@@ -153,7 +157,7 @@ function sliceAsciiRows(
     // handles it gracefully with the replacement char).
     const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
     rows.push({
-      mode,
+      mode: "ascii",
       startOffset: pendingStartOffset,
       bytes,
       text,
@@ -171,7 +175,7 @@ function sliceAsciiRows(
       flushRow(false);
       if (chunk.text) {
         rows.push({
-          mode,
+          mode: "ascii",
           startOffset: chunk.offset,
           bytes: new Uint8Array(0),
           text: chunk.text,

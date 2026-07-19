@@ -12,7 +12,6 @@
     formatRelativeTime,
     type Row,
     type ByteToken,
-    HEX_BYTES_PER_ROW,
   } from "$lib/services/line-slice";
 
   /** Session this view renders. */
@@ -261,16 +260,16 @@
 
   // --- Hex / ascii+hex rendering -------------------------------------------
 
-  /** Tokenize a row's bytes once and cache by row identity. We key on
-   *  row.startOffset (unique per row in the buffer), so the cache survives
-   *  re-renders from scrolling but invalidates when buffer is cleared. */
-  const tokenCache = new Map<number, ByteToken[]>();
+  /** Tokenize a row's bytes for ascii-row rendering.
+   *
+   *  No caching: previously this was memoized by row.startOffset, but in
+   *  ascii mode a streaming row keeps the same startOffset while its byte
+   *  length grows (e.g. "e" → "ex" → "exa" ...), so the cache returned a
+   *  stale 1-token result. tokenizeBytes on 16 bytes is sub-microsecond
+   *  and only runs for visible rows (~50), so recomputing is cheaper than
+   *  getting the cache invalidation right. */
   function rowTokens(row: Row): ByteToken[] {
-    const cached = tokenCache.get(row.startOffset);
-    if (cached) return cached;
-    const tokens = tokenizeBytes(row.bytes, row.startOffset);
-    tokenCache.set(row.startOffset, tokens);
-    return tokens;
+    return tokenizeBytes(row.bytes, row.startOffset);
   }
 
   /** Build hex cell HTML for a single byte. */
@@ -318,7 +317,6 @@
     buffer.clear();
     sessionStart = null;
     ansi = new AnsiUp();
-    tokenCache.clear();
     bump();
   }
 
@@ -390,7 +388,11 @@
         style="transform: translateY({visibleStart * rowHeight}px);"
       >
         {#each visibleRows as row, i (visibleStart + i)}
-          <div class="row" style="height: {rowHeight}px;">
+          <div
+            class="row"
+            class:row-text={displayMode === "ascii" || row.dir === "system"}
+            style="height: {rowHeight}px;"
+          >
             {#if row.dir === "system"}
               <span class="sys-marker">{row.text}</span>
             {:else if displayMode === "hex"}
@@ -490,11 +492,17 @@
   }
 
   .row {
-    white-space: pre;
     padding: 0 8px;
     box-sizing: border-box;
     overflow: hidden;
     /* Subtle stripe for readability on dense logs. */
+  }
+  /* ASCII text-stream mode: preserve whitespace and line structure in the
+     rendered HTML. Hex modes do NOT get this — they use inline-block cells
+     whose alignment is broken by `white-space: pre` (it prevents the cells
+     from laying out normally and can collapse the ascii line). */
+  .row.row-text {
+    white-space: pre;
   }
   .row:nth-child(odd) {
     background: rgba(255, 255, 255, 0.02);
@@ -523,31 +531,39 @@
     user-select: none;
   }
 
-  /* Hex cell (one byte) — fixed 3ch width ("XX "). */
+  /* Hex cell (one byte) — fixed 2ch width. inline-block + vertical-align:top
+     keeps the line height at exactly line-height (20px); without it, the
+     default baseline alignment inflates the row and pushes the ascii line
+     below out of the 40px row clip region (overflow:hidden on .row). */
   :global(.hx-cell) {
     color: #ce9178;
     display: inline-block;
     width: 2ch;
     text-align: center;
+    vertical-align: top;
   }
   :global(.light) :global(.hx-cell) {
     color: #a05a1e;
   }
 
-  /* ASCII cell under hex — width matches the byte count it spans. */
+  /* ASCII cell under hex — width matches the byte count it spans.
+     MUST be inline-block, otherwise width:Nch is ignored (inline elements
+     don't accept width) and CJK chars collapse instead of stretching to
+     align under their multi-byte hex sequence. */
   :global(.hx-ascii-cell) {
     color: #9cdcfe;
+    display: inline-block;
+    text-align: center;
+    vertical-align: top;
   }
   :global(.light) :global(.hx-ascii-cell) {
     color: #1f6feb;
   }
 
   .hex-line {
-    white-space: pre;
     line-height: 20px;
   }
   .ascii-line {
-    white-space: pre;
     line-height: 20px;
     color: #9cdcfe;
   }

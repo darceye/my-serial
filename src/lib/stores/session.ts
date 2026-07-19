@@ -140,6 +140,14 @@ export function addTxBytes(id: string, n: number) {
   });
 }
 
+export function addRxBytes(id: string, n: number) {
+  sessions.update((s) => {
+    if (!s[id]) return s;
+    const cur = s[id];
+    return { ...s, [id]: { ...cur, rxBytes: cur.rxBytes + n } };
+  });
+}
+
 export function pushHistory(id: string, text: string) {
   sessions.update((s) => {
     if (!s[id]) return s;
