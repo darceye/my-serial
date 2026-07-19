@@ -39,6 +39,7 @@
     type PortConfig,
   } from "$lib/tauri/commands";
   import { appendLog, exportLines, type ExportFormat } from "$lib/services/recorder";
+  import type { CharBreak } from "$lib/services/line-slice";
   import {
     onStatus,
     onSignal,
@@ -229,6 +230,18 @@
     patchSession(sid, { logging: !s.logging });
   }
 
+  /** Toggle a single char-break kind (nul/lf/cr/crlf/etx) on/off. */
+  function toggleCharBreak(kind: CharBreak) {
+    const sid = $activeSessionId;
+    if (!sid) return;
+    const s = $sessions[sid];
+    const set = new Set(s.lineCharBreaks);
+    if (set.has(kind)) set.delete(kind); else set.add(kind);
+    // Preserve a stable display order.
+    const order: CharBreak[] = ["nul", "lf", "cr", "crlf", "etx"];
+    patchSession(sid, { lineCharBreaks: order.filter((k) => set.has(k)) });
+  }
+
   function toggleLocale() {
     locale.update((v) => (v === "zh-CN" ? "en-US" : "zh-CN"));
   }
@@ -400,6 +413,78 @@
           />
           <span class="text-gray-400">{$_("common.pause")}</span>
         </label>
+
+        <!-- Line-break rules -->
+        <span class="text-gray-500">|</span>
+        <span class="text-gray-400">{$_("display.lineBreakChars")}:</span>
+        {#each [["nul", "display.lbNul"], ["lf", "display.lbLf"], ["cr", "display.lbCr"], ["crlf", "display.lbCrlf"], ["etx", "display.lbEtx"]] as [kind, key]}
+          <label class="flex items-center gap-1">
+            <input
+              type="checkbox"
+              checked={active.lineCharBreaks.includes(kind as CharBreak)}
+              on:change={() => toggleCharBreak(kind as CharBreak)}
+            />
+            <span class="text-gray-400">{$_(key)}</span>
+          </label>
+        {/each}
+        <label class="flex items-center gap-1">
+          <input
+            type="checkbox"
+            checked={active.customBreakEnabled}
+            on:change={(e) => patchSession(active.id, { customBreakEnabled: e.currentTarget.checked })}
+          />
+          <span class="text-gray-400">{$_("display.customBreak")}:</span>
+          <select
+            class="rounded border border-surface-border bg-surface px-1 py-0.5"
+            value={active.customBreakFormat}
+            on:change={(e) => patchSession(active.id, { customBreakFormat: e.currentTarget.value as "ascii" | "hex" })}
+            title={$_("display.customBreakFormat")}
+          >
+            <option value="ascii">{$_("display.customAscii")}</option>
+            <option value="hex">{$_("display.customHex")}</option>
+          </select>
+          <input
+            type="text"
+            class="w-28 rounded border border-surface-border bg-surface px-1.5 py-0.5 font-mono"
+            value={active.customBreakInput}
+            placeholder={active.customBreakFormat === "hex"
+              ? $_("display.customPlaceholderHex")
+              : $_("display.customPlaceholderAscii")}
+            on:change={(e) => patchSession(active.id, { customBreakInput: e.currentTarget.value })}
+          />
+        </label>
+        <label class="flex items-center gap-1">
+          <span class="text-gray-400">{$_("display.breakEveryN")}:</span>
+          <input
+            type="number"
+            min="0"
+            class="w-14 rounded border border-surface-border bg-surface px-1.5 py-0.5"
+            value={active.breakEveryNBytes}
+            title={$_("display.breakEveryNHint")}
+            on:change={(e) => patchSession(active.id, { breakEveryNBytes: Math.max(0, e.currentTarget.valueAsNumber || 0) })}
+          />
+        </label>
+        <label class="flex items-center gap-1">
+          <span class="text-gray-400">{$_("display.breakOnIdle")}:</span>
+          <input
+            type="number"
+            min="0"
+            class="w-16 rounded border border-surface-border bg-surface px-1.5 py-0.5"
+            value={active.breakOnIdleMs}
+            title={$_("display.breakOnIdleHint")}
+            on:change={(e) => patchSession(active.id, { breakOnIdleMs: Math.max(0, e.currentTarget.valueAsNumber || 0) })}
+          />
+          <span class="text-gray-500">ms</span>
+        </label>
+        <label class="flex items-center gap-1">
+          <input
+            type="checkbox"
+            checked={active.showNonPrintable}
+            on:change={(e) => patchSession(active.id, { showNonPrintable: e.currentTarget.checked })}
+          />
+          <span class="text-gray-400">{$_("display.showNonPrintable")}</span>
+        </label>
+
         <div class="flex-1"></div>
         <label class="flex items-center gap-1">
           <input type="checkbox" checked={active.logging} on:change={toggleLogging} />
@@ -438,6 +523,13 @@
               colorParse={$sessions[tab.sessionId]?.colorParse ?? true}
               displayMode={$sessions[tab.sessionId]?.displayMode ?? "ascii"}
               timestamp={$sessions[tab.sessionId]?.timestamp ?? "off"}
+              lineCharBreaks={$sessions[tab.sessionId]?.lineCharBreaks ?? ["crlf", "lf", "cr"]}
+              customBreakEnabled={$sessions[tab.sessionId]?.customBreakEnabled ?? false}
+              customBreakInput={$sessions[tab.sessionId]?.customBreakInput ?? ""}
+              customBreakFormat={$sessions[tab.sessionId]?.customBreakFormat ?? "ascii"}
+              breakEveryNBytes={$sessions[tab.sessionId]?.breakEveryNBytes ?? 0}
+              breakOnIdleMs={$sessions[tab.sessionId]?.breakOnIdleMs ?? 0}
+              showNonPrintable={$sessions[tab.sessionId]?.showNonPrintable ?? false}
               onRxChunk={(ts, text) => handleRxChunk(tab.sessionId, ts, text)}
             />
           </div>

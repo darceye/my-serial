@@ -8,6 +8,7 @@ import type {
 import { DEFAULT_CONFIG, DEFAULT_RECONNECT } from "$lib/tauri/commands";
 import type { SessionState } from "$lib/tauri/events";
 import type { DataChunk, ChunkDir } from "$lib/services/rx-buffer";
+import type { CharBreak } from "$lib/services/line-slice";
 
 /** One tab's UI-side state. */
 export interface TabSession {
@@ -35,6 +36,20 @@ export interface TabSession {
   displayMode: "ascii" | "hex" | "ascii+hex";
   timestamp: "off" | "absolute" | "relative";
   colorParse: boolean;
+  /** Configurable line-break rules. */
+  lineCharBreaks: CharBreak[];
+  customBreakEnabled: boolean;
+  /** Raw UI text for the custom break sequence(s), one per line. */
+  customBreakInput: string;
+  /** How to interpret customBreakInput: "ascii" (literal/escaped text) or "hex". */
+  customBreakFormat: "ascii" | "hex";
+  /** Force a line break every N bytes (0 = off). In hex/ascii+hex this also
+   *  sets the hex-dump row width when no other rules are active. */
+  breakEveryNBytes: number;
+  /** Force a line break if two chunks arrive more than this many ms apart (0 = off). */
+  breakOnIdleMs: number;
+  /** Show non-printable bytes as Unicode Control Pictures glyphs (␀␊␍…) instead of "." */
+  showNonPrintable: boolean;
   /** Whether to append every RX/TX chunk to a log file. */
   logging: boolean;
   /** In-memory ring buffer of recent chunks for export. Stores raw bytes +
@@ -90,6 +105,13 @@ export function createTabRecord(sessionId: string, config: PortConfig, reconnect
     displayMode: "ascii",
     timestamp: "off",
     colorParse: true,
+    lineCharBreaks: ["crlf", "lf", "cr"],
+    customBreakEnabled: false,
+    customBreakInput: "",
+    customBreakFormat: "ascii",
+    breakEveryNBytes: 0,
+    breakOnIdleMs: 0,
+    showNonPrintable: false,
     logging: false,
     recorded: [],
   };

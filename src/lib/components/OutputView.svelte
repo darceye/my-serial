@@ -10,8 +10,11 @@
     tokenizeBytes,
     formatAbsoluteTime,
     formatRelativeTime,
+    parseCustomBreakInput,
     type Row,
     type ByteToken,
+    type CharBreak,
+    type LineBreakRules,
   } from "$lib/services/line-slice";
 
   /** Session this view renders. */
@@ -25,6 +28,14 @@
   export let displayMode: "ascii" | "hex" | "ascii+hex" = "ascii";
   /** Timestamp prefix mode. */
   export let timestamp: "off" | "absolute" | "relative" = "off";
+  /** Configurable line-break rules. */
+  export let lineCharBreaks: CharBreak[] = ["crlf", "lf", "cr"];
+  export let customBreakEnabled = false;
+  export let customBreakInput = "";
+  export let customBreakFormat: "ascii" | "hex" = "ascii";
+  export let breakEveryNBytes = 0;
+  export let breakOnIdleMs = 0;
+  export let showNonPrintable = false;
   /** Optional callback fired for every RX chunk — used by App for logging/export. */
   export let onRxChunk: ((ts: number, text: string) => void) | null = null;
 
@@ -42,11 +53,24 @@
   /** Epoch of the first received byte (for relative timestamps). */
   let sessionStart: number | null = null;
 
-  /** Slice chunks into rows whenever buffer or displayMode changes.
-   *  This re-runs on every push (bump) and on mode switch. For very large
-   *  buffers this is O(n) — capped at ~2MB of bytes / O(few-thousand) rows,
-   *  which is cheap. */
-  $: bufferVersion, displayMode, (rows = sliceIntoRows(buffer.chunks, displayMode));
+  /** Build the LineBreakRules object from the current props. Recomputed when
+   *  any rule-related prop changes. */
+  let lineRules: LineBreakRules;
+  $: lineRules = {
+    charBreaks: lineCharBreaks,
+    customBreaks: {
+      enabled: customBreakEnabled,
+      sequences: customBreakEnabled ? parseCustomBreakInput(customBreakInput, customBreakFormat) : [],
+    },
+    breakEveryNBytes,
+    breakOnIdleMs,
+  };
+
+  /** Slice chunks into rows whenever buffer, displayMode, or any line-break
+   *  rule changes. This re-runs on every push (bump) and on config change.
+   *  For very large buffers this is O(n) — capped at ~2MB of bytes / O(few-
+   *  thousand) rows, which is cheap. */
+  $: bufferVersion, displayMode, lineRules, (rows = sliceIntoRows(buffer.chunks, displayMode, lineRules));
 
   /** Rows produced by the slicer. */
   let rows: Row[] = [];
@@ -269,7 +293,7 @@
    *  and only runs for visible rows (~50), so recomputing is cheaper than
    *  getting the cache invalidation right. */
   function rowTokens(row: Row): ByteToken[] {
-    return tokenizeBytes(row.bytes, row.startOffset);
+    return tokenizeBytes(row.bytes, row.startOffset, showNonPrintable);
   }
 
   /** Build hex cell HTML for a single byte. */
