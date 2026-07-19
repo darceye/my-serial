@@ -7,6 +7,7 @@ import type {
 } from "$lib/tauri/commands";
 import { DEFAULT_CONFIG, DEFAULT_RECONNECT } from "$lib/tauri/commands";
 import type { SessionState } from "$lib/tauri/events";
+import type { DataChunk, ChunkDir } from "$lib/services/rx-buffer";
 
 /** One tab's UI-side state. */
 export interface TabSession {
@@ -36,8 +37,10 @@ export interface TabSession {
   colorParse: boolean;
   /** Whether to append every RX/TX chunk to a log file. */
   logging: boolean;
-  /** In-memory ring buffer (last N lines) for export. */
-  recorded: { ts: number; dir: "rx" | "tx"; text: string }[];
+  /** In-memory ring buffer of recent chunks for export. Stores raw bytes +
+   *  decoded text + per-chunk timestamp + direction. Capped at RECORDED_MAX
+   *  entries (older entries dropped). */
+  recorded: DataChunk[];
 }
 
 export interface Tab {
@@ -92,14 +95,31 @@ export function createTabRecord(sessionId: string, config: PortConfig, reconnect
   };
 }
 
-/** Max lines kept in memory for export (older entries are dropped). */
+/** Max chunks kept in memory for export (older entries are dropped). */
 const RECORDED_MAX = 5000;
 
-export function recordLine(id: string, dir: "rx" | "tx", text: string) {
+/** Append a chunk to the session's recorded ring buffer.
+ *
+ *  IMPORTANT: `ts` is the timestamp of when the data was received (from the
+ *  backend's `serial:data` event for RX, or `Date.now()` at send time for TX).
+ *  Previously this function overwrote the passed timestamp with `Date.now()`,
+ *  losing the backend's more accurate RX timestamp — that bug is now fixed. */
+export function recordChunk(id: string, dir: ChunkDir, bytes: Uint8Array, text: string, ts: number) {
   sessions.update((s) => {
     if (!s[id]) return s;
     const cur = s[id];
-    const recorded = [...cur.recorded, { ts: Date.now(), dir, text }];
+    // Compute the offset of this new chunk within the recorded buffer.
+    const lastChunk = cur.recorded[cur.recorded.length - 1];
+    const offset = lastChunk ? lastChunk.offset + lastChunk.bytes.length : 0;
+    const chunk: DataChunk = {
+      ts,
+      dir,
+      // Copy bytes so callers can reuse their source buffer.
+      bytes: bytes.length === 0 ? new Uint8Array(0) : new Uint8Array(bytes),
+      text,
+      offset,
+    };
+    const recorded = [...cur.recorded, chunk];
     if (recorded.length > RECORDED_MAX) recorded.splice(0, recorded.length - RECORDED_MAX);
     return { ...s, [id]: { ...cur, recorded } };
   });

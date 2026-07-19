@@ -23,7 +23,7 @@
     patchSession,
     addTxBytes,
     pushHistory,
-    recordLine,
+    recordChunk,
   } from "$lib/stores/session";
 
   import {
@@ -47,9 +47,9 @@
   import PortConfigPanel from "$lib/components/PortConfigPanel.svelte";
   import SendPanel from "$lib/components/SendPanel.svelte";
   import StatusBar from "$lib/components/StatusBar.svelte";
-  import Terminal from "$lib/components/Terminal.svelte";
+  import OutputView from "$lib/components/OutputView.svelte";
 
-  let termRefs: Record<string, Terminal> = {};
+  let termRefs: Record<string, OutputView> = {};
   const unlistenFns: (() => void)[] = [];
   // Per-session event unsubscribers.
   const sessionUnsubs: Record<string, (() => void)[]> = {};
@@ -168,14 +168,17 @@
     try {
       await writeData(sid, bytes);
       addTxBytes(sid, bytes.length);
-      const decoded = new TextDecoder().decode(new Uint8Array(bytes));
-      // Echo sent bytes into the terminal in a dim color (helpful for debugging).
-      termRefs[sid]?.writeText(`\x1b[90m${decoded}\x1b[0m`);
+      const byteArr = new Uint8Array(bytes);
+      const decoded = new TextDecoder().decode(byteArr);
+      // Echo sent bytes into the output view — the native renderer colors
+      // tx chunks via its dir-tx class, no ANSI wrapping needed.
+      termRefs[sid]?.writeText(decoded);
       if (bytes.length > 0) pushHistory(sid, decoded.replace(/[\r\n]+$/, ""));
-      // Record for export + optional file logging.
-      recordLine(sid, "tx", decoded);
+      // Record for export + optional file logging. Use send time as ts.
+      const now = Date.now();
+      recordChunk(sid, "tx", byteArr, decoded, now);
       const s = $sessions[sid];
-      if (s?.logging) appendLog(sid, { ts: Date.now(), dir: "tx", text: decoded });
+      if (s?.logging) appendLog(sid, { ts: now, dir: "tx", text: decoded });
     } catch (e) {
       console.error("write failed", e);
       alert(`${$_("toast.writeFailed", { values: { msg: String(e) } })}`);
@@ -188,9 +191,12 @@
     termRefs[sid]?.clear();
   }
 
-  /** Called by Terminal for every RX chunk — records for export + optional file logging. */
+  /** Called by OutputView for every RX chunk — records for export + optional
+   *  file logging. Uses the backend's chunk timestamp (p.ts) for accurate
+   *  receive-time tracking, NOT Date.now() at processing time. */
   function handleRxChunk(sid: string, ts: number, text: string) {
-    recordLine(sid, "rx", text);
+    const bytes = new TextEncoder().encode(text);
+    recordChunk(sid, "rx", bytes, text, ts);
     const s = $sessions[sid];
     if (s?.logging) {
       appendLog(sid, { ts, dir: "rx", text });
@@ -412,19 +418,28 @@
         </button>
       </div>
 
-      {#key active.id}
-        <div class="relative min-h-0 flex-1 overflow-hidden">
-          <Terminal
-            bind:this={termRefs[active.id]}
-            sessionId={active.id}
-            paused={active.paused}
-            colorParse={active.colorParse}
-            displayMode={active.displayMode}
-            timestamp={active.timestamp}
-            onRxChunk={(ts, text) => handleRxChunk(active.id, ts, text)}
-          />
-        </div>
-      {/key}
+      <!-- All tabs' output views are mounted simultaneously; inactive tabs
+           are hidden via display:none. Each OutputView is created only once
+           → its chunk buffer and virtual-scroll state survive tab switches
+           → switching is instant and never loses history. -->
+      <div class="relative min-h-0 flex-1 overflow-hidden">
+        {#each $tabs as tab (tab.sessionId)}
+          <div
+            class="absolute inset-0"
+            style:display={$activeSessionId === tab.sessionId ? "block" : "none"}
+          >
+            <OutputView
+              bind:this={termRefs[tab.sessionId]}
+              sessionId={tab.sessionId}
+              paused={$sessions[tab.sessionId]?.paused ?? false}
+              colorParse={$sessions[tab.sessionId]?.colorParse ?? true}
+              displayMode={$sessions[tab.sessionId]?.displayMode ?? "ascii"}
+              timestamp={$sessions[tab.sessionId]?.timestamp ?? "off"}
+              onRxChunk={(ts, text) => handleRxChunk(tab.sessionId, ts, text)}
+            />
+          </div>
+        {/each}
+      </div>
     </section>
 
     <!-- Send panel -->
