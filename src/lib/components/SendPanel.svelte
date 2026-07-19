@@ -187,7 +187,7 @@
 <svelte:window on:beforeunload={() => { if (loopTimer) clearInterval(loopTimer); }} />
 
 <div class="flex flex-shrink-0 flex-col gap-2 border-t border-surface-border bg-surface-card p-3">
-  <div class="flex items-center gap-2 text-xs text-gray-400">
+  <div class="flex items-center gap-2 text-xs text-fg-soft">
     <Send size={13} />
     <span>{$_("send.title")}</span>
   </div>
@@ -273,7 +273,7 @@
 
   {#if history.length > 0}
     <div class="flex items-start gap-2 pt-1">
-      <History size={13} class="mt-0.5 shrink-0 text-gray-500" />
+      <History size={13} class="mt-0.5 shrink-0 text-fg-mute" />
       <div class="flex flex-wrap gap-1.5">
         {#each history as item, i (`${item.mode}:${item.text}:${i}`)}
           <button
@@ -282,7 +282,7 @@
             class="flex max-w-[240px] items-center gap-1 rounded border border-surface-border bg-surface px-2 py-0.5 font-mono text-xs hover:bg-surface-hover"
             title={item.text}
           >
-            <span class="rounded bg-surface-hover px-1 text-[10px] uppercase text-gray-400">{item.mode === "hex" ? "HEX" : "ASC"}</span>
+            <span class="rounded bg-surface-hover px-1 text-[10px] uppercase text-fg-soft">{item.mode === "hex" ? "HEX" : "ASC"}</span>
             <span class="truncate">{item.text}</span>
           </button>
         {/each}

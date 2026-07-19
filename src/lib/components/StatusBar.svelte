@@ -56,7 +56,7 @@
   })();
 </script>
 
-<div class="flex flex-shrink-0 flex-wrap items-center gap-x-5 gap-y-1 border-t border-surface-border bg-surface px-3 py-1.5 text-xs text-gray-300">
+<div class="flex flex-shrink-0 flex-wrap items-center gap-x-5 gap-y-1 border-t border-surface-border bg-surface px-3 py-1.5 text-xs text-fg">
   <!-- Connection state -->
   <div class="flex items-center gap-1.5">
     <span class="inline-block h-2 w-2 rounded-full {stateColor}"></span>
@@ -65,21 +65,21 @@
 
   {#if session.state === "connected" || session.state === "reconnecting"}
     <!-- RX / TX -->
-    <span>↓ {fmtBytes(session.rxBytes)} <span class="text-gray-500">({session.rxRate.toFixed(0)} {$_("stats.bytesPerSec")})</span></span>
-    <span>↑ {fmtBytes(session.txBytes)} <span class="text-gray-500">({session.txRate.toFixed(0)} {$_("stats.bytesPerSec")})</span></span>
+    <span>↓ {fmtBytes(session.rxBytes)} <span class="text-fg-mute">({session.rxRate.toFixed(0)} {$_("stats.bytesPerSec")})</span></span>
+    <span>↑ {fmtBytes(session.txBytes)} <span class="text-fg-mute">({session.txRate.toFixed(0)} {$_("stats.bytesPerSec")})</span></span>
     {#if session.connectedAt}
       <span>⏱ {fmtDuration(durationSec)}</span>
     {/if}
 
     <!-- Signals -->
     <div class="flex items-center gap-2 pl-2">
-      <span class="text-gray-500">RTS/DTR</span>
+      <span class="text-fg-mute">RTS/DTR</span>
     </div>
     <div class="flex items-center gap-1.5">
-      <span>CTS</span><span class="font-mono {session.signals.cts ? 'text-green-400' : 'text-gray-600'}">●</span>
-      <span>DSR</span><span class="font-mono {session.signals.dsr ? 'text-green-400' : 'text-gray-600'}">●</span>
-      <span>CD</span><span class="font-mono {session.signals.cd ? 'text-green-400' : 'text-gray-600'}">●</span>
-      <span>RI</span><span class="font-mono {session.signals.ri ? 'text-green-400' : 'text-gray-600'}">●</span>
+      <span>CTS</span><span class="font-mono {session.signals.cts ? 'text-green-400' : 'text-fg-mute'}">●</span>
+      <span>DSR</span><span class="font-mono {session.signals.dsr ? 'text-green-400' : 'text-fg-mute'}">●</span>
+      <span>CD</span><span class="font-mono {session.signals.cd ? 'text-green-400' : 'text-fg-mute'}">●</span>
+      <span>RI</span><span class="font-mono {session.signals.ri ? 'text-green-400' : 'text-fg-mute'}">●</span>
     </div>
   {/if}
 </div>

@@ -2,10 +2,42 @@
 @tailwind components;
 @tailwind utilities;
 
-/* xterm.js base styling — color theme tuned for the app's dark surface */
-:root {
-  --terminal-bg: #1e1e1e;
-  --terminal-fg: #cccccc;
+/* ---- Theme color tokens ------------------------------------------------
+   The actual hex values for the surface/accent/fg Tailwind tokens. The
+   .light override on <html> flips every bg-surface / border-surface-border /
+   text-fg* class at once; the dark values below mirror the previous hard-coded
+   palette exactly, so dark mode is byte-for-byte identical to before. */
+@layer base {
+  :root {
+    --c-surface:        #1f1f1f;
+    --c-surface-card:   #2b2b2b;
+    --c-surface-hover:  #333333;
+    --c-surface-border: #404040;
+    --c-accent:         #60cdff;
+    --c-accent-hover:   #4db8eb;
+    --c-fg:             #e6e6e6;
+    --c-fg-soft:        #9ca3af;   /* ~ text-gray-400 */
+    --c-fg-mute:        #6b7280;   /* ~ text-gray-500 */
+    --c-fg-on:          #ffffff;   /* text on accent surface */
+
+    --terminal-bg: #1e1e1e;
+    --terminal-fg: #cccccc;
+  }
+  html.light {
+    --c-surface:        #ffffff;
+    --c-surface-card:   #f4f4f4;
+    --c-surface-hover:  #e5e5e5;
+    --c-surface-border: #d0d0d0;
+    --c-accent:         #005fb0;
+    --c-accent-hover:   #004a8a;
+    --c-fg:             #1e1e1e;
+    --c-fg-soft:        #5a5a5a;
+    --c-fg-mute:        #7a7a7a;
+    --c-fg-on:          #ffffff;
+
+    --terminal-bg: #ffffff;
+    --terminal-fg: #1e1e1e;
+  }
 }
 
 html,
@@ -26,13 +58,14 @@ body,
 body {
   font-family: "Segoe UI Variable", "Segoe UI", -apple-system,
     "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
-  background-color: #1f1f1f;
-  color: #e6e6e6;
+  background-color: var(--c-surface);
+  color: var(--c-fg);
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Custom scrollbar — subtle, Win11-like */
+/* Custom scrollbar — subtle, Win11-like. Track stays transparent; thumb uses
+   a semi-opaque neutral that works on both light and dark surfaces. */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -41,11 +74,11 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #4a4a4a;
+  background: rgba(128, 128, 128, 0.4);
   border-radius: 5px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #5a5a5a;
+  background: rgba(128, 128, 128, 0.7);
 }
 
 /* xterm container fills its parent. NO padding here — padding on .xterm

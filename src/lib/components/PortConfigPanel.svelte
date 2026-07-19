@@ -36,7 +36,7 @@
 <div class="flex flex-shrink-0 flex-wrap items-end gap-x-4 gap-y-2 border-b border-surface-border p-3">
   <!-- Port -->
   <label class="flex flex-col gap-1">
-    <span class="text-xs text-gray-400">{$_("config.port")}</span>
+    <span class="text-xs text-fg-soft">{$_("config.port")}</span>
     <select
       bind:value={config.port_name}
       disabled={connected || reconnecting}
@@ -70,7 +70,7 @@
        on change we snap it back to the empty placeholder, which means the
        dropdown reopens with the full list every time. -->
   <label class="flex flex-col gap-1">
-    <span class="text-xs text-gray-400">{$_("config.baudRate")}</span>
+    <span class="text-xs text-fg-soft">{$_("config.baudRate")}</span>
     <div class="flex">
       <input
         type="number"
@@ -79,7 +79,7 @@
         class="baud-input w-24 rounded-l border border-r-0 border-surface-border bg-surface px-2 py-1.5 text-sm tabular-nums disabled:opacity-50"
       />
       <div
-        class="relative flex items-center rounded-r border border-surface-border bg-surface px-2 py-1.5 text-xs text-gray-400"
+        class="relative flex items-center rounded-r border border-surface-border bg-surface px-2 py-1.5 text-xs text-fg-soft"
         class:opacity-50={connected || reconnecting}
       >
         <span aria-hidden="true">▾</span>
@@ -99,7 +99,7 @@
 
   <!-- Data bits -->
   <label class="flex flex-col gap-1">
-    <span class="text-xs text-gray-400">{$_("config.dataBits")}</span>
+    <span class="text-xs text-fg-soft">{$_("config.dataBits")}</span>
     <select
       bind:value={config.data_bits}
       disabled={connected || reconnecting}
@@ -111,7 +111,7 @@
 
   <!-- Parity -->
   <label class="flex flex-col gap-1">
-    <span class="text-xs text-gray-400">{$_("config.parity")}</span>
+    <span class="text-xs text-fg-soft">{$_("config.parity")}</span>
     <select
       bind:value={config.parity}
       disabled={connected || reconnecting}
@@ -127,7 +127,7 @@
 
   <!-- Stop bits -->
   <label class="flex flex-col gap-1">
-    <span class="text-xs text-gray-400">{$_("config.stopBits")}</span>
+    <span class="text-xs text-fg-soft">{$_("config.stopBits")}</span>
     <select
       bind:value={config.stop_bits}
       disabled={connected || reconnecting}
@@ -140,7 +140,7 @@
 
   <!-- Flow control -->
   <label class="flex flex-col gap-1">
-    <span class="text-xs text-gray-400">{$_("config.flowControl")}</span>
+    <span class="text-xs text-fg-soft">{$_("config.flowControl")}</span>
     <select
       bind:value={config.flow_control}
       disabled={connected || reconnecting}
@@ -158,7 +158,7 @@
       <button
         type="button"
         on:click={onDisconnect}
-        class="flex items-center gap-1.5 rounded-md bg-red-600/90 px-4 py-1.5 text-sm font-medium text-white hover:bg-red-600"
+        class="flex items-center gap-1.5 rounded-md bg-red-600/90 px-4 py-1.5 text-sm font-medium text-fg-on hover:bg-red-600"
       >
         <Plug2 size={15} />
         {$_("common.disconnect")}

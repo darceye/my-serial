@@ -295,13 +295,13 @@
 
 <svelte:window on:keydown={onGlobalKey} />
 
-<main class="flex h-screen w-screen flex-col overflow-hidden bg-surface text-gray-100">
+<main class="flex h-screen w-screen flex-col overflow-hidden bg-surface text-fg">
   <!-- Title bar -->
   <header class="flex flex-shrink-0 items-center justify-between border-b border-surface-border px-3 py-2">
     <div class="flex items-center gap-2">
       <h1 class="text-sm font-semibold tracking-wide">MySerial</h1>
-      <span class="text-xs text-gray-500">·</span>
-      <span class="text-xs text-gray-400">{$_("app.subtitle")}</span>
+      <span class="text-xs text-fg-mute">·</span>
+      <span class="text-xs text-fg-soft">{$_("app.subtitle")}</span>
     </div>
     <div class="flex items-center gap-1">
       <button
@@ -327,8 +327,8 @@
       <div
         class="group flex cursor-pointer items-center gap-2 whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors
           {$activeSessionId === tab.sessionId
-            ? 'border-accent bg-surface text-white'
-            : 'border-transparent text-gray-400 hover:bg-surface-hover'}"
+            ? 'border-accent bg-surface text-fg-on'
+            : 'border-transparent text-fg-soft hover:bg-surface-hover'}"
         role="tab"
         tabindex="0"
         on:click={() => {
@@ -361,7 +361,7 @@
       </div>
     {/each}
     <button
-      class="flex items-center px-3 text-gray-400 hover:bg-surface-hover hover:text-white"
+      class="flex items-center px-3 text-fg-soft hover:bg-surface-hover hover:text-fg-on"
       on:click={() => newTab()}
       title={$_("common.newTab")}
     >
@@ -390,7 +390,7 @@
       <!-- Display controls strip -->
       <div class="flex flex-shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-surface-border bg-surface-card/60 px-3 py-1 text-xs">
         <label class="flex items-center gap-1">
-          <span class="text-gray-400">{$_("display.mode")}:</span>
+          <span class="text-fg-soft">{$_("display.mode")}:</span>
           <select
             class="rounded border border-surface-border bg-surface px-1.5 py-0.5"
             value={active.displayMode}
@@ -402,7 +402,7 @@
           </select>
         </label>
         <label class="flex items-center gap-1">
-          <span class="text-gray-400">{$_("display.timestamp")}:</span>
+          <span class="text-fg-soft">{$_("display.timestamp")}:</span>
           <select
             class="rounded border border-surface-border bg-surface px-1.5 py-0.5"
             value={active.timestamp}
@@ -419,7 +419,7 @@
             checked={active.colorParse}
             on:change={(e) => patchSession(active.id, { colorParse: e.currentTarget.checked })}
           />
-          <span class="text-gray-400">{$_("menu.colorParse")}</span>
+          <span class="text-fg-soft">{$_("menu.colorParse")}</span>
         </label>
         <label class="flex items-center gap-1">
           <input
@@ -427,12 +427,12 @@
             checked={active.paused}
             on:change={(e) => patchSession(active.id, { paused: e.currentTarget.checked })}
           />
-          <span class="text-gray-400">{$_("common.pause")}</span>
+          <span class="text-fg-soft">{$_("common.pause")}</span>
         </label>
 
         <!-- Line-break rules -->
-        <span class="text-gray-500">|</span>
-        <span class="text-gray-400">{$_("display.lineBreakChars")}:</span>
+        <span class="text-fg-mute">|</span>
+        <span class="text-fg-soft">{$_("display.lineBreakChars")}:</span>
         {#each [["nul", "display.lbNul"], ["lf", "display.lbLf"], ["cr", "display.lbCr"], ["crlf", "display.lbCrlf"], ["etx", "display.lbEtx"]] as [kind, key]}
           <label class="flex items-center gap-1">
             <input
@@ -440,7 +440,7 @@
               checked={active.lineCharBreaks.includes(kind as CharBreak)}
               on:change={() => toggleCharBreak(kind as CharBreak)}
             />
-            <span class="text-gray-400">{$_(key)}</span>
+            <span class="text-fg-soft">{$_(key)}</span>
           </label>
         {/each}
         <label class="flex items-center gap-1">
@@ -449,7 +449,7 @@
             checked={active.customBreakEnabled}
             on:change={(e) => patchSession(active.id, { customBreakEnabled: e.currentTarget.checked })}
           />
-          <span class="text-gray-400">{$_("display.customBreak")}:</span>
+          <span class="text-fg-soft">{$_("display.customBreak")}:</span>
           <select
             class="rounded border border-surface-border bg-surface px-1 py-0.5"
             value={active.customBreakFormat}
@@ -470,7 +470,7 @@
           />
         </label>
         <label class="flex items-center gap-1">
-          <span class="text-gray-400">{$_("display.breakEveryN")}:</span>
+          <span class="text-fg-soft">{$_("display.breakEveryN")}:</span>
           <input
             type="number"
             min="0"
@@ -481,7 +481,7 @@
           />
         </label>
         <label class="flex items-center gap-1">
-          <span class="text-gray-400">{$_("display.breakOnIdle")}:</span>
+          <span class="text-fg-soft">{$_("display.breakOnIdle")}:</span>
           <input
             type="number"
             min="0"
@@ -490,7 +490,7 @@
             title={$_("display.breakOnIdleHint")}
             on:change={(e) => patchSession(active.id, { breakOnIdleMs: Math.max(0, e.currentTarget.valueAsNumber || 0) })}
           />
-          <span class="text-gray-500">ms</span>
+          <span class="text-fg-mute">ms</span>
         </label>
         <label class="flex items-center gap-1">
           <input
@@ -498,22 +498,22 @@
             checked={active.showNonPrintable}
             on:change={(e) => patchSession(active.id, { showNonPrintable: e.currentTarget.checked })}
           />
-          <span class="text-gray-400">{$_("display.showNonPrintable")}</span>
+          <span class="text-fg-soft">{$_("display.showNonPrintable")}</span>
         </label>
 
         <div class="flex-1"></div>
         <label class="flex items-center gap-1">
           <input type="checkbox" checked={active.logging} on:change={toggleLogging} />
-          <span class="text-gray-400">{$_("menu.log")}</span>
+          <span class="text-fg-soft">{$_("menu.log")}</span>
         </label>
         <div class="flex items-center gap-1">
-          <span class="text-gray-400">{$_("common.export")}:</span>
+          <span class="text-fg-soft">{$_("common.export")}:</span>
           <button class="rounded bg-surface px-1.5 py-0.5 hover:bg-surface-hover" on:click={() => exportCurrent("txt")}>txt</button>
           <button class="rounded bg-surface px-1.5 py-0.5 hover:bg-surface-hover" on:click={() => exportCurrent("csv")}>csv</button>
           <button class="rounded bg-surface px-1.5 py-0.5 hover:bg-surface-hover" on:click={() => exportCurrent("hex")}>hex</button>
         </div>
         <button
-          class="flex items-center gap-1 rounded bg-surface px-2 py-0.5 text-gray-300 hover:bg-surface-hover"
+          class="flex items-center gap-1 rounded bg-surface px-2 py-0.5 text-fg hover:bg-surface-hover"
           on:click={onClearTerminal}
           title={$_("common.clear")}
         >
@@ -563,7 +563,7 @@
     <!-- Status bar -->
     <StatusBar session={active} />
   {:else}
-    <div class="flex flex-1 items-center justify-center text-gray-500">
+    <div class="flex flex-1 items-center justify-center text-fg-mute">
       <button
         class="flex items-center gap-2 rounded-md bg-surface-card px-4 py-2 hover:bg-surface-hover"
         on:click={() => newTab()}
