@@ -327,7 +327,7 @@
       <div
         class="group flex cursor-pointer items-center gap-2 whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors
           {$activeSessionId === tab.sessionId
-            ? 'border-accent bg-surface text-fg-on'
+            ? 'border-accent bg-surface text-fg'
             : 'border-transparent text-fg-soft hover:bg-surface-hover'}"
         role="tab"
         tabindex="0"
