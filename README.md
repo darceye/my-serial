@@ -28,8 +28,6 @@ ANSI color · UTF-8 CJK · Auto-reconnect · Multi-tab · Hex & dual-pane viewer
 - [Build from Source](#-build-from-source)
 - [Tech Stack](#-tech-stack)
 - [Project Structure](#-project-structure)
-- [Documentation](#-documentation)
-- [Roadmap](#-roadmap)
 - [Contributing](#-contributing)
 - [License](#-license)
 
@@ -185,26 +183,8 @@ my_serial/
 │       ├── serial_io.rs      # UTF-8 boundary-safe decoding
 │       ├── ports.rs          # Port enumeration + hot-plug watcher
 │       └── types.rs          # Cross-IPC types & event payloads
-├── tests/                    # TS unit tests (rx-buffer, line-slice)
-└── docs/                     # Requirements & architecture specs
+└── tests/                    # TS unit tests (rx-buffer, line-slice)
 ```
-
-### 📚 Documentation
-
-- [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) — Requirements specification (acceptance criteria)
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — System architecture & IPC contract
-
-> ℹ️ Note: the architecture doc still references the original xterm.js design; the implementation has since moved to a custom `ansi_up`-based viewer. Treat the code as source of truth.
-
-### 🗺 Roadmap
-
-- [x] v0.1.0 — Core feature parity with HTerm + the three flagship improvements
-- [ ] **Named send macros** (quick-save & recall common commands)
-- [ ] **Search / filter** in the output pane
-- [ ] **RTS/DTR interactive toggles** in the UI
-- [ ] **Dec / Bin display modes**
-- [ ] **Error counter** in the status bar
-- [ ] CI builds with automated release artifacts
 
 ### 🤝 Contributing
 
@@ -325,16 +305,6 @@ npm run check
 # 生产构建 → 在 src-tauri/target/release/bundle/ 下生成 MSI + NSIS
 npm run tauri build
 ```
-
-### 🗺 路线图
-
-- [x] v0.1.0 —— 对齐 HTerm 核心功能 + 三大旗舰改进
-- [ ] **命名发送宏**（快速保存并调用常用命令）
-- [ ] **输出区搜索 / 过滤**
-- [ ] **UI 中 RTS/DTR 交互开关**
-- [ ] **Dec / Bin 显示模式**
-- [ ] **状态栏错误计数**
-- [ ] CI 自动构建并产出发布产物
 
 ### 🤝 贡献
 
