@@ -10,7 +10,7 @@ ANSI color · UTF-8 CJK · Auto-reconnect · Multi-tab · Hex & dual-pane viewer
 [![Svelte 5](https://img.shields.io/badge/Svelte-5-ff3e00?logo=svelte&logoColor=white)](https://svelte.dev/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%2B-0078D4?logo=windows&logoColor=white)](#)
-[![Release](https://img.shields.io/badge/Release-v0.1.0-orange.svg)](../../releases)
+[![Release](https://img.shields.io/badge/Release-v0.1.1-orange.svg)](../../releases)
 
 </div>
 
@@ -115,8 +115,8 @@ Grab the latest installer from the [**Releases page**](../../releases):
 
 | Asset | Use case |
 |---|---|
-| `MySerial_0.1.0_x64_en-US.msi` | Standard Windows MSI installer (recommended for enterprise) |
-| `MySerial_0.1.0_x64-setup.exe` | NSIS installer, bundles WebView2 bootstrapper |
+| `MySerial_0.1.1_x64_en-US.msi` | Standard Windows MSI installer (recommended for enterprise) |
+| `MySerial_0.1.1_x64-setup.exe` | NSIS installer, bundles WebView2 bootstrapper |
 | `my-serial.exe` | Standalone portable executable |
 
 **Requirements**: Windows 10 (1809+) or Windows 11. WebView2 runtime is bundled with the NSIS installer; the MSI assumes it is present (it ships with Win11 by default).
@@ -274,8 +274,8 @@ MIT — see [`LICENSE`](LICENSE).
 
 | 资产 | 适用场景 |
 |---|---|
-| `MySerial_0.1.0_x64_en-US.msi` | Windows 标准 MSI 安装包（企业部署推荐） |
-| `MySerial_0.1.0_x64-setup.exe` | NSIS 安装包，自带 WebView2 引导安装 |
+| `MySerial_0.1.1_x64_en-US.msi` | Windows 标准 MSI 安装包（企业部署推荐） |
+| `MySerial_0.1.1_x64-setup.exe` | NSIS 安装包，自带 WebView2 引导安装 |
 | `my-serial.exe` | 独立便携版可执行文件 |
 
 **运行要求**：Windows 10（1809+）或 Windows 11。NSIS 安装包会自动引导安装 WebView2；MSI 假定系统已有（Win11 默认内置）。

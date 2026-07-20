@@ -1,6 +1,6 @@
 [package]
 name = "my-serial"
-version = "0.1.0"
+version = "0.1.1"
 description = "MySerial - Windows serial debugging tool"
 authors = ["you"]
 edition = "2021"
