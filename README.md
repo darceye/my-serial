@@ -56,7 +56,7 @@ Built with **Tauri 2 + Rust + Svelte 5**, it ships as a tiny (~5 MB installer) n
 | Multi-tab sessions | ❌ | ✅ |
 | Hex + ASCII dual-pane view | partial | ✅ (CJK-aligned) |
 | Byte-level hover tooltip | ❌ | ✅ |
-| MSI installer | ❌ | ✅ |
+| MSI / NSIS installer | ❌ | ✅ |
 | File size | ~2 MB | ~5 MB installer |
 
 ### ✨ Features
@@ -115,10 +115,11 @@ Grab the latest installer from the [**Releases page**](../../releases):
 
 | Asset | Use case |
 |---|---|
-| `MySerial_0.1.0_x64_en-US.msi` | Standard Windows MSI installer (recommended) |
+| `MySerial_0.1.0_x64_en-US.msi` | Standard Windows MSI installer (recommended for enterprise) |
+| `MySerial_0.1.0_x64-setup.exe` | NSIS installer, bundles WebView2 bootstrapper |
 | `my-serial.exe` | Standalone portable executable |
 
-**Requirements**: Windows 10 (1809+) or Windows 11. WebView2 runtime required (built into Win11 by default).
+**Requirements**: Windows 10 (1809+) or Windows 11. WebView2 runtime is bundled with the NSIS installer; the MSI assumes it is present (it ships with Win11 by default).
 
 ### 🔨 Build from Source
 
@@ -142,7 +143,7 @@ npm run tauri dev
 # Type-check
 npm run check
 
-# Production build → generates MSI in src-tauri/target/release/bundle/
+# Production build → generates MSI + NSIS in src-tauri/target/release/bundle/
 npm run tauri build
 ```
 
@@ -175,7 +176,7 @@ my_serial/
 │       ├── tauri/            # invoke + listen bindings with typed payloads
 │       └── i18n/locales/     # zh-CN.json, en-US.json
 ├── src-tauri/                # Backend (Rust)
-│   ├── tauri.conf.json       # MSI bundle config
+│   ├── tauri.conf.json       # MSI + NSIS bundle config
 │   └── src/
 │       ├── commands.rs       # 10 #[tauri::command] IPC handlers
 │       ├── session.rs        # Session manager, read loop, reconnect FSM
@@ -218,7 +219,7 @@ MIT — see [`LICENSE`](LICENSE).
 | 多标签会话 | ❌ | ✅ |
 | Hex + ASCII 双列视图 | 部分 | ✅（CJK 对齐） |
 | 字节级悬停提示 | ❌ | ✅ |
-| MSI 安装包 | ❌ | ✅ |
+| MSI / NSIS 安装包 | ❌ | ✅ |
 | 文件体积 | ~2 MB | ~5 MB 安装包 |
 
 ### ✨ 功能特性
@@ -273,10 +274,11 @@ MIT — see [`LICENSE`](LICENSE).
 
 | 资产 | 适用场景 |
 |---|---|
-| `MySerial_0.1.0_x64_en-US.msi` | Windows 标准 MSI 安装包（推荐） |
+| `MySerial_0.1.0_x64_en-US.msi` | Windows 标准 MSI 安装包（企业部署推荐） |
+| `MySerial_0.1.0_x64-setup.exe` | NSIS 安装包，自带 WebView2 引导安装 |
 | `my-serial.exe` | 独立便携版可执行文件 |
 
-**运行要求**：Windows 10（1809+）或 Windows 11。需要 WebView2 运行时（Win11 默认内置）。
+**运行要求**：Windows 10（1809+）或 Windows 11。NSIS 安装包会自动引导安装 WebView2；MSI 假定系统已有（Win11 默认内置）。
 
 ### 🔨 从源码构建
 
@@ -300,7 +302,7 @@ npm run tauri dev
 # 类型检查
 npm run check
 
-# 生产构建 → 在 src-tauri/target/release/bundle/ 下生成 MSI
+# 生产构建 → 在 src-tauri/target/release/bundle/ 下生成 MSI + NSIS
 npm run tauri build
 ```
 
