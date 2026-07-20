@@ -1805,6 +1805,7 @@ dependencies = [
  "tauri-plugin-fs",
  "tauri-plugin-store",
  "tokio",
+ "toml 0.8.2",
 ]
 
 [[package]]

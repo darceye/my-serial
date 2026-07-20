@@ -118,3 +118,71 @@ export async function configureReconnect(
 ): Promise<void> {
   await invoke("configure_reconnect", { sessionId, config });
 }
+
+// ---------- User config (config.toml) ----------
+// Mirrors the Rust structs in src-tauri/src/config.rs. All fields optional /
+// defaulted on the Rust side so partial files parse cleanly.
+
+export type SuffixKind = "none" | "cr" | "lf" | "space" | "etx" | "nul" | "custom";
+export type SendMode = "ascii" | "hex";
+
+export interface SendPanelConfig {
+  append_suffix: boolean;
+  suffix_kind: SuffixKind | string;
+  suffix_custom_ascii: boolean;
+  suffix_custom_input: string;
+  mode: SendMode | string;
+  loop_send: boolean;
+  loop_interval: number;
+}
+
+/** Wire-format default for a tab's send-panel config. Single source of truth —
+ *  re-exported by the session store so UI defaults and config migration agree. */
+export const DEFAULT_SEND_PANEL: SendPanelConfig = {
+  append_suffix: true,
+  suffix_kind: "lf",
+  suffix_custom_ascii: true,
+  suffix_custom_input: "",
+  mode: "ascii",
+  loop_send: false,
+  loop_interval: 1000,
+};
+
+export interface ConfigHistoryEntry {
+  text: string;
+  mode: SendMode | string;
+}
+
+export interface TabConfig {
+  config: PortConfig;
+  reconnect: ReconnectConfig;
+  display_mode: string;
+  timestamp: string;
+  color_parse: boolean;
+  paused: boolean;
+  line_char_breaks: string[];
+  custom_break_enabled: boolean;
+  custom_break_input: string;
+  custom_break_format: string;
+  break_every_n_bytes: number;
+  break_on_idle_ms: number;
+  show_non_printable: boolean;
+  logging: boolean;
+  send: SendPanelConfig;
+  history: ConfigHistoryEntry[];
+}
+
+export interface AppConfig {
+  theme?: string;
+  locale?: string;
+  tabs: TabConfig[];
+  active_tab_index?: number;
+}
+
+export async function loadConfig(): Promise<AppConfig> {
+  return invoke<AppConfig>("load_config");
+}
+
+export async function saveConfig(config: AppConfig): Promise<void> {
+  await invoke("save_config", { config });
+}

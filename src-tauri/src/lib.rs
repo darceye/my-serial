@@ -4,6 +4,7 @@
 //! watcher, and the read-error listener that drives the reconnect state machine.
 
 mod commands;
+mod config;
 mod ports;
 mod serial_io;
 mod session;
@@ -49,6 +50,8 @@ pub fn run() {
             commands::get_signals,
             commands::destroy_session,
             commands::configure_reconnect,
+            commands::load_config,
+            commands::save_config,
         ])
         .run(tauri::generate_context!())
         .expect("error while running MySerial application");

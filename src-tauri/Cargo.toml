@@ -22,6 +22,8 @@ tauri-plugin-dialog = "2"
 tauri-plugin-store = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# TOML codec for the user config file (config.toml in app_config_dir).
+toml = "0.8"
 # serialport-rs is the mature cross-platform serial backend
 serialport = "4.5"
 # Stable async runtime used by the read loop & reconnect watcher

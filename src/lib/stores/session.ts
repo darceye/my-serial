@@ -4,8 +4,15 @@ import type {
   PortInfo,
   ReconnectConfig,
   Signals,
+  SendPanelConfig,
+  SuffixKind,
+  SendMode,
 } from "$lib/tauri/commands";
-import { DEFAULT_CONFIG, DEFAULT_RECONNECT } from "$lib/tauri/commands";
+import {
+  DEFAULT_CONFIG,
+  DEFAULT_RECONNECT,
+  DEFAULT_SEND_PANEL,
+} from "$lib/tauri/commands";
 import type { SessionState } from "$lib/tauri/events";
 import type { DataChunk, ChunkDir } from "$lib/services/rx-buffer";
 import type { CharBreak } from "$lib/services/line-slice";
@@ -16,6 +23,12 @@ export interface HistoryEntry {
   text: string;
   mode: "ascii" | "hex";
 }
+
+/** Re-export the wire-format send-panel default so existing imports
+ *  (`import { DEFAULT_SEND_PANEL } from "$lib/stores/session"`) keep working.
+ *  The canonical definition lives in commands.ts so the Rust↔TS boundary and
+ *  the store layer share one source of truth. */
+export { DEFAULT_SEND_PANEL } from "$lib/tauri/commands";
 
 /** One tab's UI-side state. */
 export interface TabSession {
@@ -61,6 +74,9 @@ export interface TabSession {
   showNonPrintable: boolean;
   /** Whether to append every RX/TX chunk to a log file. */
   logging: boolean;
+  /** Send-panel settings (suffix / mode / loop) lifted out of the component so
+   * they persist per-tab and can be saved to / restored from config.toml. */
+  send: SendPanelConfig;
   /** In-memory ring buffer of recent chunks for export. Stores raw bytes +
    *  decoded text + per-chunk timestamp + direction. Capped at RECORDED_MAX
    *  entries (older entries dropped). */
@@ -122,6 +138,7 @@ export function createTabRecord(sessionId: string, config: PortConfig, reconnect
     breakOnIdleMs: 0,
     showNonPrintable: false,
     logging: false,
+    send: { ...DEFAULT_SEND_PANEL },
     recorded: [],
   };
 }

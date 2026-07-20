@@ -2,29 +2,51 @@
   import { _ } from "svelte-i18n";
   import { Send, History, Repeat, Hexagon } from "@lucide/svelte";
   import type { HistoryEntry } from "$lib/stores/session";
+  import { DEFAULT_SEND_PANEL } from "$lib/stores/session";
+  import type { SendPanelConfig, SuffixKind, SendMode } from "$lib/tauri/commands";
   import { parseCustomBreakLine } from "$lib/services/line-slice";
 
   export let connected: boolean;
   export let history: HistoryEntry[];
+  /** Persisted send-panel state for the active tab. The component is
+   *  effectively a controlled view over this object: props flow in, local
+   *  mutations flow back out via `onSendConfigChange`. */
+  export let send: SendPanelConfig = { ...DEFAULT_SEND_PANEL };
+  /** Called whenever a persisted send-panel setting changes, so the parent
+   *  can write it back to the tab's store and ultimately to config.toml. */
+  export let onSendConfigChange: (patch: Partial<SendPanelConfig>) => void = () => {};
   /** Called with the byte array to transmit + the raw text + mode (for history). */
   export let onSend: (payload: { bytes: number[]; text: string; mode: "ascii" | "hex" }) => void;
 
-  /** Input box contents (raw user text, before parsing). */
+  /** Input box contents (raw user text, before parsing). Ephemeral — NOT
+   *  persisted (intentionally: the draft from a previous session is rarely
+   *  what the user wants re-sent). */
   let text = "";
-  /** Whether to append a suffix after the payload. */
-  let appendSuffix = true;
-  /** Which preset suffix to append, or "custom" for a user-defined sequence. */
-  let suffixKind: "none" | "cr" | "lf" | "space" | "etx" | "nul" | "custom" = "lf";
-  let suffixCustomAscii = true;
-  let suffixCustomInput = "";
-  /** Input mode: ascii text or hex bytes. */
-  let mode: "ascii" | "hex" = "ascii";
-  let loopSend = false;
-  let loopInterval = 1000;
+
+  // Local mirrors of the persisted `send` fields. Svelte's `bind:` needs
+  // writable locals; we propagate changes back up via reactive statements.
+  let appendSuffix = send.append_suffix;
+  let suffixKind: SuffixKind | "custom" = send.suffix_kind as SuffixKind | "custom";
+  let suffixCustomAscii = send.suffix_custom_ascii;
+  let suffixCustomInput = send.suffix_custom_input;
+  let mode: SendMode = send.mode as SendMode;
+  let loopSend = send.loop_send;
+  let loopInterval = send.loop_interval;
   let loopTimer: ReturnType<typeof setInterval> | null = null;
 
   // Re-export `mode` as `hexMode` alias for template readability.
   $: hexMode = mode === "hex";
+
+  // --- Propagate local mutations back to the persisted store ---
+  $: if (appendSuffix !== send.append_suffix) onSendConfigChange({ append_suffix: appendSuffix });
+  $: if (suffixKind !== send.suffix_kind) onSendConfigChange({ suffix_kind: suffixKind });
+  $: if (suffixCustomAscii !== send.suffix_custom_ascii) onSendConfigChange({ suffix_custom_ascii: suffixCustomAscii });
+  $: if (suffixCustomInput !== send.suffix_custom_input) onSendConfigChange({ suffix_custom_input: suffixCustomInput });
+  $: if (mode !== send.mode) onSendConfigChange({ mode });
+  $: if (loopInterval !== send.loop_interval) onSendConfigChange({ loop_interval: loopInterval });
+  // NOTE: loopSend is intentionally NOT persisted — auto-resuming a send loop
+  // across app restarts is surprising/dangerous (could spam a device the user
+  // forgot about). It always starts as false.
 
   /** Decode the suffix selection into the byte sequence to append. */
   function suffixBytes(): number[] {
@@ -98,7 +120,7 @@
    *  the user reviews then clicks Send. */
   function recall(item: HistoryEntry) {
     text = item.text;
-    mode = item.mode;
+    mode = item.mode as SendMode;
   }
 
   /** Normalize hex input: strip every non-hex char, then group into pairs

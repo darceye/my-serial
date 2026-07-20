@@ -3,6 +3,7 @@
 
 use tauri::{AppHandle, State};
 
+use crate::config::AppConfig;
 use crate::ports;
 use crate::session::SessionManager;
 use crate::types::{
@@ -99,6 +100,20 @@ pub fn configure_reconnect(
 ) -> Result<(), String> {
     // Reconnect config is stored on the Session; mutate via a dedicated accessor.
     manager.set_reconnect(&session_id, config)
+}
+
+/// Load the persisted user config. Returns defaults on first run or if the
+/// file is missing/corrupt — never errors, so the frontend can always apply
+/// the result directly.
+#[tauri::command]
+pub fn load_config(app: AppHandle) -> AppConfig {
+    crate::config::load(&app)
+}
+
+/// Persist the user config atomically.
+#[tauri::command]
+pub fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
+    crate::config::save(&app, &config)
 }
 
 /// Tiny non-UUID id generator (avoids pulling the uuid crate just for this).

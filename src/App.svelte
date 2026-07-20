@@ -35,9 +35,12 @@
     closePort,
     writeData,
     destroySession,
+    loadConfig,
+    saveConfig,
     DEFAULT_CONFIG,
     DEFAULT_RECONNECT,
     type PortConfig,
+    type SendPanelConfig,
   } from "$lib/tauri/commands";
   import { appendLog, exportLines, type ExportFormat } from "$lib/services/recorder";
   import type { CharBreak } from "$lib/services/line-slice";
@@ -46,6 +49,8 @@
     onSignal,
     onPortsChanged,
   } from "$lib/tauri/events";
+  import { applyConfig, collectConfig } from "$lib/config/migrate";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
 
   import PortConfigPanel from "$lib/components/PortConfigPanel.svelte";
   import SendPanel from "$lib/components/SendPanel.svelte";
@@ -62,10 +67,47 @@
   onMount(async () => {
     document.documentElement.classList.toggle("light", $theme === "light");
     await refreshPorts();
-    // Start with one tab.
-    await newTab();
+
+    // Restore persisted config (theme, locale, tabs). On first run load_config
+    // returns defaults and applyConfig returns no tabs, so we create one.
+    let createdIds: string[] = [];
+    try {
+      const cfg = await loadConfig();
+      const res = await applyConfig(cfg);
+      createdIds = res.createdIds;
+      // Wire up per-session event listeners for every restored tab.
+      for (const sid of createdIds) {
+        await subscribeSession(sid);
+      }
+    } catch (e) {
+      console.error("load config failed", e);
+    }
+    if (createdIds.length === 0) {
+      await newTab();
+    }
+
     // Global ports-changed listener.
     unlistenFns.push(await onPortsChanged(async () => { await refreshPorts(); }));
+
+    // Persist config when the user closes the main window. We intercept the
+    // close so the save completes before the window actually goes away.
+    try {
+      const win = getCurrentWindow();
+      const unlisten = await win.onCloseRequested(async (e) => {
+        e.preventDefault();
+        try {
+          await saveConfig(collectConfig());
+        } catch (err) {
+          console.error("save config failed", err);
+        }
+        await win.destroy();
+      });
+      unlistenFns.push(unlisten);
+    } catch (e) {
+      // In non-Tauri contexts (e.g. svelte-check / unit tests) the window API
+      // is unavailable — fall back to beforeunload.
+      console.warn("window close hook unavailable", e);
+    }
   });
 
   onDestroy(() => {
@@ -557,6 +599,14 @@
     <SendPanel
       connected={active.state === "connected"}
       history={active.history}
+      send={active.send}
+      onSendConfigChange={(patch: Partial<SendPanelConfig>) => {
+        const sid = $activeSessionId;
+        if (!sid) return;
+        const cur = $sessions[sid];
+        if (!cur) return;
+        patchSession(sid, { send: { ...cur.send, ...patch } });
+      }}
       onSend={onSend}
     />
 
