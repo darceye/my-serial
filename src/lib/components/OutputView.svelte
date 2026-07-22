@@ -481,42 +481,74 @@
     return tokenizeBytes(row.bytes, row.startOffset, showNonPrintable);
   }
 
+  /** Bytes per visual group in hex modes. Groups are separated by a thin
+   *  vertical divider, so byte offsets are easy to locate at a glance
+   *  (standard hex-editor layout: two 8-byte groups per 16-byte row). */
+  const HEX_GROUP_BYTES = 8;
+
   /** Build hex cell HTML for a single byte. */
   function hexCellHtml(b: number): string {
     return b.toString(16).padStart(2, "0");
   }
 
   /** Build the complete hex row HTML (one <span> per byte, with data-offset
-   *  for hover tooltip). */
+   *  for hover tooltip). Bytes are split into HEX_GROUP_BYTES-wide groups,
+   *  each separated by a divider span (`.hx-div`). */
   function hexRowHtml(row: Row): string {
-    const cells: string[] = [];
-    for (let i = 0; i < row.bytes.length; i++) {
-      const off = row.startOffset + i;
-      cells.push(
-        `<span class="hx-cell" data-byte-offset="${off}">${hexCellHtml(row.bytes[i])}</span>`,
-      );
+    const groups: string[] = [];
+    for (let g = 0; g < row.bytes.length; g += HEX_GROUP_BYTES) {
+      const end = Math.min(g + HEX_GROUP_BYTES, row.bytes.length);
+      const cells: string[] = [];
+      for (let i = g; i < end; i++) {
+        const off = row.startOffset + i;
+        cells.push(
+          `<span class="hx-cell" data-byte-offset="${off}">${hexCellHtml(row.bytes[i])}</span>`,
+        );
+      }
+      groups.push(cells.join(" "));
     }
-    return cells.join(" ");
+    // Single group (short/partial row) → no divider.
+    return groups.length > 1
+      ? groups.join(`<span class="hx-div"></span>`)
+      : groups[0] ?? "";
   }
 
   /** Build the ascii row HTML from tokens. Each token renders as ONE <span>
    *  with explicit width = byteCount * (cell width). Multi-byte tokens (CJK)
-   *  thus stretch to align under their N hex cells above. */
+   *  thus stretch to align under their N hex cells above.
+   *
+   *  Tokens are bucketed into the same HEX_GROUP_BYTES-wide groups as the hex
+   *  line, with a divider between groups. A multi-byte token that straddles a
+   *  group boundary is kept whole (never split) — it stays in the group where
+   *  its first byte lies. */
   function asciiRowHtml(row: Row): string {
     const tokens = rowTokens(row);
-    const cells: string[] = [];
+    const groups: string[][] = [];
+    let cur: string[] = [];
+    let nextBoundary = row.startOffset + HEX_GROUP_BYTES;
     for (const tk of tokens) {
+      // Start a new group when a token begins at/after the boundary.
+      if (tk.offset >= nextBoundary && cur.length > 0) {
+        groups.push(cur);
+        cur = [];
+        nextBoundary += HEX_GROUP_BYTES;
+      }
       // Width: 1 byte = 3ch (matches hex "XX " cell). Multi-byte token spans
       // byteCount cells. We also need the inter-cell space (byteCount - 1).
       // Total chars = byteCount * 3 (XX+space) - 1 (no trailing space).
       const widthCh = tk.byteCount * 3 - 1;
       const escaped = escapeHtml(tk.char).replace(/&nbsp;/g, " ");
       const displayChar = escaped === " " ? "&nbsp;" : escaped;
-      cells.push(
-        `<span class="hx-ascii-cell" data-byte-offset="${tk.offset}" style="width:${widthCh}ch;display:inline-block;text-align:center">${displayChar}</span> `,
+      cur.push(
+        `<span class="hx-ascii-cell" data-byte-offset="${tk.offset}" style="width:${widthCh}ch;display:inline-block;text-align:center">${displayChar}</span>`,
       );
     }
-    return cells.join("");
+    if (cur.length > 0) groups.push(cur);
+    // join(" ") within a group mirrors the hex line (no trailing space), so
+    // the two lines stay column-aligned and the dividers line up vertically.
+    return groups.length > 1
+      ? groups.map((c) => c.join(" ")).join(`<span class="hx-div"></span>`)
+      : (groups[0] ?? []).join(" ");
   }
 
   // --- Public API (called by parent via bind:this) --------------------------
@@ -550,38 +582,14 @@
     if (viewportEl) viewportHeight = viewportEl.clientHeight;
   }
 
-  // --- Ruler ticks ---------------------------------------------------------
-
-  /** Tick marks for the byte-offset ruler. One tick per 4 bytes (compact but
-   *  readable for 16-byte-wide rows). Each tick's `xCh` is the horizontal
-   *  position in `ch` units (matching the hex cell width: each byte = 3ch). */
-  const RULER_TICK_EVERY = 4;
-  $: rulerTicks = (() => {
-    if (displayMode === "ascii") return [];
-    const ticks: { xCh: number; label: string }[] = [];
-    // Show ticks across one 16-byte row (the row wraps after 16).
-    for (let i = 0; i <= 16; i += RULER_TICK_EVERY) {
-      // Each byte occupies 3ch ("XX "). Tick i sits at i*3 ch.
-      ticks.push({ xCh: i * 3, label: String(i) });
-    }
-    return ticks;
-  })();
+  // --- Ruler ticks (removed) -----------------------------------------------
+  // The previous byte-offset ruler used `ch`-unit ticks whose positions did
+  // not line up with the actual rendered hex cells, so it read as noise. It
+  // was dropped; per-row offset is instead conveyed by the 8-byte group
+  // dividers below, which align exactly with the data.
 </script>
 
 <div class="output-root" bind:this={outputRootEl}>
-  {#if displayMode !== "ascii"}
-    <!-- Byte-offset ruler. Sits above the scroll area, fixed height. Only
-         meaningful in hex modes where bytes have fixed cell widths. -->
-    <div class="ruler" aria-hidden="true">
-      <span class="ruler-label">offset</span>
-      <span class="ruler-ticks">
-        {#each rulerTicks as tick}
-          <span class="tick" style="left: {tick.xCh}ch;">{tick.label}</span>
-        {/each}
-      </span>
-    </div>
-  {/if}
-
   <div
     bind:this={viewportEl}
     class="viewport"
@@ -670,37 +678,6 @@
     color: var(--c-terminal-fg);
   }
 
-  /* Byte-offset ruler (hex modes only). */
-  .ruler {
-    flex: 0 0 auto;
-    height: 22px;
-    display: flex;
-    align-items: center;
-    border-bottom: 1px solid rgba(128, 128, 128, 0.2);
-    background: rgba(128, 128, 128, 0.05);
-    font-family: "Cascadia Code", "Consolas", "Courier New", monospace;
-    font-size: 11px;
-    color: rgba(180, 180, 180, 0.7);
-    padding: 0 8px;
-    user-select: none;
-  }
-  .ruler-label {
-    flex: 0 0 auto;
-    margin-right: 8px;
-    opacity: 0.7;
-  }
-  .ruler-ticks {
-    position: relative;
-    height: 100%;
-    flex: 1 1 auto;
-  }
-  .tick {
-    position: absolute;
-    top: 4px;
-    transform: translateX(-50%);
-    font-variant-numeric: tabular-nums;
-  }
-
   .viewport {
     flex: 1 1 auto;
     position: relative;
@@ -780,6 +757,37 @@
   }
   :global(.light) :global(.hx-cell) {
     color: #a05a1e;
+  }
+
+  /* 8-byte group divider in hex modes. Width matches one inter-byte space
+     (1ch), so the gap between the two groups is identical to the gap between
+     neighbouring bytes — no empty column, just a 1px vertical line drawn
+     down the middle of the gap.
+
+     The line uses a FIXED height (20px = one text line) rather than
+     height:100%, because % heights only resolve against a parent with an
+     explicit height. In ascii+hex mode the divider lives inside .hex-line /
+     .ascii-line, which have no set height (only line-height), so height:100%
+     would collapse to 0 and the line would vanish. A fixed 20px guarantees a
+     line on every row; in ascii+hex the two 20px lines (hex + ascii) stack
+     into one continuous 40px line. */
+  :global(.hx-div) {
+    display: inline-block;
+    position: relative;
+    width: 1ch;
+    height: 20px;
+    vertical-align: top;
+  }
+  :global(.hx-div)::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    height: 20px;
+    left: 50%;
+    border-left: 1px solid rgba(160, 160, 160, 0.6);
+  }
+  :global(.light) :global(.hx-div)::after {
+    border-left-color: rgba(80, 80, 80, 0.55);
   }
 
   /* ASCII cell under hex — width matches the byte count it spans.
