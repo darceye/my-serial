@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import { _ } from "svelte-i18n";
   import type { TabSession } from "$lib/stores/session";
+  import { version } from "../../../package.json";
 
   export let session: TabSession;
 
@@ -82,4 +83,7 @@
       <span>RI</span><span class="font-mono {session.signals.ri ? 'text-green-400' : 'text-fg-mute'}">●</span>
     </div>
   {/if}
+
+  <!-- App version, pushed to the far right -->
+  <span class="ml-auto text-fg-mute">v{version}</span>
 </div>
