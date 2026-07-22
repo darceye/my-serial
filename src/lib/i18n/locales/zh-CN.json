@@ -165,5 +165,16 @@
     "cleared": "已清空",
     "exported": "已导出到 {path}",
     "exportFailed": "导出失败：{msg}"
+  },
+  "tooltip": {
+    "rxTime": "接收时间",
+    "dir": "方向",
+    "byteOffset": "字节偏移",
+    "rawBytes": "原始字节",
+    "decoded": "解码",
+    "type": "类型",
+    "endian": "字节序",
+    "hex": "HEX",
+    "decimal": "十进制"
   }
 }

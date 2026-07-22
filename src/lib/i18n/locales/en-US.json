@@ -165,5 +165,16 @@
     "cleared": "Cleared",
     "exported": "Exported to {path}",
     "exportFailed": "Export failed: {msg}"
+  },
+  "tooltip": {
+    "rxTime": "RX time",
+    "dir": "Dir",
+    "byteOffset": "Offset",
+    "rawBytes": "Raw bytes",
+    "decoded": "Decoded",
+    "type": "Type",
+    "endian": "Endian",
+    "hex": "Hex",
+    "decimal": "Decimal"
   }
 }

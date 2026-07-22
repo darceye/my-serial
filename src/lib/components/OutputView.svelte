@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { get } from "svelte/store";
+  import { _ } from "svelte-i18n";
   import { AnsiUp } from "ansi_up";
   import { onData, onReconnected } from "$lib/tauri/events";
   import { theme } from "$lib/stores/session";
@@ -83,6 +84,10 @@
   $: rowHeight = displayMode === "ascii+hex" ? 40 : 20;
 
   let viewportEl: HTMLDivElement | null = null;
+  /** The outer .output-root container. The tooltip is rendered as a child of
+   *  this (NOT of the scrolling .viewport) so it stays anchored to the visible
+   *  panel regardless of scroll position. */
+  let outputRootEl: HTMLDivElement | null = null;
   let scrollTop = 0;
   let viewportHeight = 600;
 
@@ -167,64 +172,244 @@
 
   // --- Tooltip (hover a character to see receive time + byte info) ---------
 
+  /** One line of integer interpretation shown in the hover tooltip. */
+  interface IntLine {
+    /** "U8" | "I8" | "U16" | "I16" | "U32" | "I32"; "" on a BE continuation row. */
+    type: string;
+    /** "" for single-byte types; "LE" / "BE" for 16/32-bit. */
+    endian: string;
+    /** Unsigned hex representation of the bytes, e.g. "0x4241". */
+    hex: string;
+    /** Signed (I*) or unsigned (U*) decimal value. */
+    dec: string;
+  }
+
   /** Current tooltip state, or null when hidden. */
   let tooltip: {
+    /** Final left/top (output-root space), assigned by the clamp reactive
+     *  statement once the tooltip box has been measured. */
     x: number;
     y: number;
+    /** Cursor position in output-root space (set on mousemove). */
+    px: number;
+    py: number;
+    /** Visible viewport bounds in output-root space (set on mousemove). */
+    visLeft: number;
+    visTop: number;
+    visRight: number;
+    visBottom: number;
     byteOffset: number;
     ts: number;
     dir: string;
     rawBytes: string;
     decoded: string;
+    ints: IntLine[];
   } | null = null;
 
+  /** Measured rendered tooltip box (updated via bind:clientWidth/Height on the
+   *  tooltip element). Used for edge-flip clamping so the box never overflows
+   *  the visible panel, regardless of how tall the integer table is. */
+  let tooltipW = 0;
+  let tooltipH = 0;
+
+  // Clamp the tooltip inside the visible viewport once we have a real
+  // measurement. Re-runs whenever the tooltip changes, the cursor moves
+  // (px/py/vis* mutate together via assignment to `tooltip`), or the measured
+  // size updates after the first paint.
+  $: if (tooltip) {
+    const TT_W = tooltipW || 260;
+    const TT_H = tooltipH || 60;
+    let x = tooltip.px + 14;
+    if (x + TT_W > tooltip.visRight - 4) x = tooltip.px - TT_W - 14;
+    x = Math.max(tooltip.visLeft + 4, Math.min(x, tooltip.visRight - TT_W - 4));
+    let y = tooltip.py + 16;
+    if (y + TT_H > tooltip.visBottom - 4) y = tooltip.py - TT_H - 10;
+    y = Math.max(tooltip.visTop + 4, Math.min(y, tooltip.visBottom - TT_H - 4));
+    tooltip.x = x;
+    tooltip.y = y;
+  }
+
+  /** Find the row that contains `byteOffset`, via binary search over the
+   *  reactive `rows` array. Returns null when out of range.
+   *
+   *  Why rows (not buffer.chunkAt): each Row pre-concatenates its bytes
+   *  ACROSS chunk boundaries (a 16-byte hex row may be assembled from several
+   *  small RX reads). chunkAt would only see one read's worth of bytes, so an
+   *  I32 parse starting at a row's first byte could be capped at 1-2 bytes
+   *  even though the row visibly holds 16. Reading from the row guarantees the
+   *  full contiguous byte span is available for the integer interpretation. */
+  function rowAtOffset(off: number): Row | null {
+    if (rows.length === 0) return null;
+    let lo = 0, hi = rows.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >>> 1;
+      if (rows[mid].startOffset <= off) lo = mid;
+      else hi = mid - 1;
+    }
+    const r = rows[lo];
+    return off >= r.startOffset && off < r.startOffset + r.bytes.length ? r : null;
+  }
+
   /** Event-delegated mousemove: find the closest ancestor with a
-   *  data-byte-offset, look up its owning chunk, show tooltip.
+   *  data-byte-offset, look up its owning row, show tooltip.
    *  This avoids attaching listeners to each <span>. */
   function onMouseMove(e: MouseEvent) {
     const target = e.target as HTMLElement | null;
     const cell = target?.closest("[data-byte-offset]") as HTMLElement | null;
-    if (!cell || !viewportEl) {
+    if (!cell || !viewportEl || !outputRootEl) {
       tooltip = null;
       return;
     }
     const offsetAttr = cell.dataset.byteOffset;
     if (offsetAttr == null) { tooltip = null; return; }
     const byteOffset = parseInt(offsetAttr, 10);
-    const chunk = buffer.chunkAt(byteOffset);
-    if (!chunk) { tooltip = null; return; }
+    const row = rowAtOffset(byteOffset);
+    if (!row) { tooltip = null; return; }
 
-    // Byte offset within the chunk.
-    const inChunk = byteOffset - chunk.offset;
-    // Collect up to 4 bytes starting here (for the "raw bytes" tooltip field).
-    const showCount = Math.min(4, chunk.bytes.length - inChunk);
-    const rawBytes = Array.from(chunk.bytes.subarray(inChunk, inChunk + showCount))
+    // Byte offset of the cursor within the row. From here we read up to 4
+    // CONTIGUOUS bytes — independent of where the underlying RX chunks were
+    // split — for both the "raw bytes" field and the integer table.
+    const inRow = byteOffset - row.startOffset;
+    const showCount = Math.min(4, row.bytes.length - inRow);
+    const slice = row.bytes.subarray(inRow, inRow + showCount);
+    const rawBytes = Array.from(slice)
       .map((b) => b.toString(16).padStart(2, "0"))
       .join(" ");
-    // Decode the same slice for the "decoded" field (best-effort).
-    let decoded = ".";
-    try {
-      const dec = new TextDecoder("utf-8", { fatal: false }).decode(
-        chunk.bytes.subarray(inChunk, inChunk + showCount),
-      );
-      decoded = dec.length > 0 ? dec : ".";
-    } catch { /* keep "." */ }
+    const decoded = decodeWithControlPictures(slice);
 
-    // Position tooltip near the cursor, clamped to viewport.
+    // Position tooltip. The tooltip lives OUTSIDE the scrolling .viewport
+    // (it's a sibling, in .output-root), so its coordinates must be in the
+    // .output-root's coordinate space. We anchor to the visible viewport
+    // rect — getBoundingClientRect() returns viewport-relative (screen)
+    // coords that do NOT shift with scroll, which is exactly what we want:
+    // without this, the absolute-positioned tooltip would be treated as part
+    // of the scrollable content and drift upward off-screen as the user
+    // scrolls down (the original bug).
     const rect = viewportEl.getBoundingClientRect();
+    const rootRect = outputRootEl.getBoundingClientRect();
+    // Pointer position relative to .output-root.
+    const px = e.clientX - rootRect.left;
+    const py = e.clientY - rootRect.top;
+    // Visible viewport bounds, in .output-root space.
+    const visLeft = rect.left - rootRect.left;
+    const visTop = rect.top - rootRect.top;
+    const visRight = visLeft + rect.width;
+    const visBottom = rect.top + rect.height - rootRect.top;
+
     tooltip = {
-      x: Math.min(e.clientX - rect.left + 12, rect.width - 240),
-      y: Math.min(e.clientY - rect.top + 12, rect.height - 100),
+      x: 0,
+      y: 0,
+      // Pointer-relative bounds captured now; the actual clamp runs in the
+      // reactive statement below, AFTER the tooltip DOM has measured its real
+      // size (the integer table height varies with how many bytes/rows are
+      // available, so a fixed estimate would under-count and let the box
+      // overflow the panel into the send area — the original bottom-clip bug).
+      px,
+      py,
+      visLeft,
+      visTop,
+      visRight,
+      visBottom,
       byteOffset,
-      ts: chunk.ts,
-      dir: chunk.dir,
+      ts: row.ts,
+      dir: row.dir,
       rawBytes,
       decoded,
+      ints: parseIntLines(slice),
     };
   }
 
   function onMouseLeave() {
     tooltip = null;
+  }
+
+  // --- Integer interpretation (tooltip table) ------------------------------
+
+  /** Build the integer-parsing lines for the hover tooltip from the bytes
+   *  starting at the hovered offset (up to 4 available).
+   *
+   *  Coverage rules:
+   *   - 8-bit  types (U8 / I8) only need 1 byte  → always shown.
+   *   - 16-bit types (U16 / I16) need 2 bytes    → shown when ≥ 2 remain.
+   *   - 32-bit types (U32 / I32) need 4 bytes    → shown when ≥ 4 remain.
+   *  16/32-bit values are shown in BOTH little-endian and big-endian, since
+   *  serial protocols vary; 8-bit values are byte-order-independent. */
+  function parseIntLines(bytes: Uint8Array): IntLine[] {
+    const lines: IntLine[] = [];
+    if (bytes.length === 0) return lines;
+
+    // DataView over a fresh copy so little/big-endian getInt* work directly.
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.length);
+
+    // --- 8-bit (byte order doesn't apply) ---
+    const b0 = bytes[0];
+    const u8 = b0;
+    const i8 = b0 < 0x80 ? b0 : b0 - 0x100;
+    lines.push({ type: "U8", endian: "", hex: hexOf(bytes, 1), dec: String(u8) });
+    lines.push({ type: "I8", endian: "", hex: hexOf(bytes, 1), dec: String(i8) });
+
+    // --- 16-bit (need ≥ 2 bytes) ---
+    if (bytes.length >= 2) {
+      const hex16 = hexOf(bytes, 2);
+      // Little-endian
+      const u16le = dv.getUint16(0, true);
+      const i16le = dv.getInt16(0, true);
+      // Big-endian
+      const u16be = dv.getUint16(0, false);
+      const i16be = dv.getInt16(0, false);
+      lines.push({ type: "U16", endian: "LE", hex: hex16, dec: String(u16le) });
+      lines.push({ type: "U16", endian: "BE", hex: hex16, dec: String(u16be) });
+      lines.push({ type: "I16", endian: "LE", hex: hex16, dec: String(i16le) });
+      lines.push({ type: "I16", endian: "BE", hex: hex16, dec: String(i16be) });
+    }
+
+    // --- 32-bit (need ≥ 4 bytes) ---
+    if (bytes.length >= 4) {
+      const hex32 = hexOf(bytes, 4);
+      const u32le = dv.getUint32(0, true);
+      const i32le = dv.getInt32(0, true);
+      const u32be = dv.getUint32(0, false);
+      const i32be = dv.getInt32(0, false);
+      lines.push({ type: "U32", endian: "LE", hex: hex32, dec: String(u32le) });
+      lines.push({ type: "U32", endian: "BE", hex: hex32, dec: String(u32be) });
+      lines.push({ type: "I32", endian: "LE", hex: hex32, dec: String(i32le) });
+      lines.push({ type: "I32", endian: "BE", hex: hex32, dec: String(i32be) });
+    }
+
+    return lines;
+  }
+
+  /** Format the first `n` bytes as an uppercase 0x-prefixed hex string. */
+  function hexOf(bytes: Uint8Array, n: number): string {
+    let s = "0x";
+    for (let i = 0; i < n; i++) s += bytes[i].toString(16).padStart(2, "0").toUpperCase();
+    return s;
+  }
+
+  /** Decode a byte slice for the tooltip's "decoded" field. UTF-8 decode is
+   *  best-effort (invalid sequences fall back to U+FFFD). Each byte that would
+   *  render invisibly — C0/C1 control bytes, DEL, and a literal space — is
+   *  shown via its Unicode "Control Pictures" symbol (␀..␟, ␡ for DEL, ␣ for
+   *  space) so the user can see exactly what byte is there instead of a blank. */
+  function decodeWithControlPictures(bytes: Uint8Array): string {
+    let text: string;
+    try {
+      text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+    } catch {
+      text = "";
+    }
+    let out = "";
+    for (const ch of text) {
+      const cp = ch.codePointAt(0)!;
+      // Single-byte controls 0x00-0x1F → U+2400 + cp (␀ ␁ … ␟).
+      if (cp >= 0x00 && cp <= 0x1f) out += String.fromCodePoint(0x2400 + cp);
+      // DEL (0x7f) → U+2421 (␡).
+      else if (cp === 0x7f) out += String.fromCodePoint(0x2421);
+      // Literal space (0x20) → U+2423 (␣) so it isn't collapsed to nothing.
+      else if (cp === 0x20) out += String.fromCodePoint(0x2423);
+      else out += ch;
+    }
+    return out.length > 0 ? out : ".";
   }
 
   // --- Row rendering helpers ------------------------------------------------
@@ -383,7 +568,7 @@
   })();
 </script>
 
-<div class="output-root">
+<div class="output-root" bind:this={outputRootEl}>
   {#if displayMode !== "ascii"}
     <!-- Byte-offset ruler. Sits above the scroll area, fixed height. Only
          meaningful in hex modes where bytes have fixed cell widths. -->
@@ -431,17 +616,44 @@
         {/each}
       </div>
     </div>
-
-    {#if tooltip}
-      <div class="tooltip" style="left: {tooltip.x}px; top: {tooltip.y}px;">
-        <div class="tt-row"><span class="tt-k">接收时间</span><span class="tt-v">{formatAbsoluteTime(tooltip.ts)}</span></div>
-        <div class="tt-row"><span class="tt-k">方向</span><span class="tt-v tt-dir-{tooltip.dir}">{tooltip.dir.toUpperCase()}</span></div>
-        <div class="tt-row"><span class="tt-k">字节偏移</span><span class="tt-v">{tooltip.byteOffset} (0x{tooltip.byteOffset.toString(16).toUpperCase()})</span></div>
-        <div class="tt-row"><span class="tt-k">原始字节</span><span class="tt-v">{tooltip.rawBytes}</span></div>
-        <div class="tt-row"><span class="tt-k">解码</span><span class="tt-v">{tooltip.decoded}</span></div>
-      </div>
-    {/if}
   </div>
+
+  {#if tooltip}
+    <!-- Tooltip is a child of .output-root, NOT of the scrolling .viewport.
+         This keeps it anchored to the visible panel: its absolute coords are
+         resolved against .output-root (which doesn't scroll), so it no longer
+         drifts off-screen as the user scrolls down through the content.
+         clientWidth/clientHeight are bound so the clamp reactive statement can
+         use the REAL measured size (the integer-table height varies with how
+         many bytes/rows are available) instead of a fixed estimate. -->
+    <div
+      class="tooltip"
+      style="left: {tooltip.x}px; top: {tooltip.y}px;"
+      bind:clientWidth={tooltipW}
+      bind:clientHeight={tooltipH}
+    >
+      <div class="tt-row"><span class="tt-k">{$_("tooltip.rxTime")}</span><span class="tt-v">{formatAbsoluteTime(tooltip.ts)}</span></div>
+      <div class="tt-row"><span class="tt-k">{$_("tooltip.dir")}</span><span class="tt-v tt-dir-{tooltip.dir}">{tooltip.dir.toUpperCase()}</span></div>
+      <div class="tt-row"><span class="tt-k">{$_("tooltip.byteOffset")}</span><span class="tt-v">{tooltip.byteOffset} (0x{tooltip.byteOffset.toString(16).toUpperCase()})</span></div>
+      <div class="tt-row"><span class="tt-k">{$_("tooltip.rawBytes")}</span><span class="tt-v">{tooltip.rawBytes}</span></div>
+      <div class="tt-row"><span class="tt-k">{$_("tooltip.decoded")}</span><span class="tt-v">{tooltip.decoded}</span></div>
+      {#if tooltip.ints.length > 0}
+        <div class="tt-ints">
+          <div class="tt-ints-h">
+            <span>{$_("tooltip.type")}</span><span>{$_("tooltip.endian")}</span><span>{$_("tooltip.hex")}</span><span>{$_("tooltip.decimal")}</span>
+          </div>
+          {#each tooltip.ints as line}
+            <div class="tt-ints-r">
+              <span class="tt-ints-t">{line.type}</span>
+              <span class="tt-ints-e">{line.endian || "—"}</span>
+              <span class="tt-ints-hex">{line.hex}</span>
+              <span class="tt-ints-dec">{line.dec}</span>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -618,7 +830,10 @@
     line-height: 1.5;
     pointer-events: none;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-    min-width: 180px;
+    /* Width is tuned to match the TT_W/TT_H constants used in onMouseMove for
+       edge-flip clamping, so the tooltip never overflows the visible area. */
+    width: 260px;
+    max-width: 260px;
     backdrop-filter: blur(4px);
   }
   :global(.light) .tooltip {
@@ -651,4 +866,60 @@
   .tt-dir-rx { color: #4ec9b0; }
   .tt-dir-tx { color: #569cd6; }
   .tt-dir-system { color: #dcdcaa; }
+
+  /* Integer interpretation table inside the tooltip. */
+  .tt-ints {
+    margin-top: 6px;
+    border-top: 1px solid rgba(128, 128, 128, 0.4);
+    padding-top: 6px;
+  }
+  :global(.light) .tt-ints {
+    border-top-color: rgba(0, 0, 0, 0.15);
+  }
+  .tt-ints-h,
+  .tt-ints-r {
+    display: grid;
+    grid-template-columns: 34px 42px 70px 1fr;
+    column-gap: 8px;
+    align-items: baseline;
+    font-size: 10px;
+    line-height: 1.6;
+  }
+  .tt-ints-h {
+    color: rgba(180, 180, 180, 0.8);
+    text-transform: uppercase;
+    margin-bottom: 2px;
+  }
+  :global(.light) .tt-ints-h {
+    color: #666;
+  }
+  .tt-ints-r {
+    font-family: "Cascadia Code", "Consolas", monospace;
+  }
+  .tt-ints-t {
+    color: #569cd6;
+    font-weight: 600;
+  }
+  :global(.light) .tt-ints-t {
+    color: #0550ae;
+  }
+  .tt-ints-e {
+    color: #c586c0;
+  }
+  :global(.light) .tt-ints-e {
+    color: #9a3a8e;
+  }
+  .tt-ints-hex {
+    color: #ce9178;
+  }
+  :global(.light) .tt-ints-hex {
+    color: #a05a1e;
+  }
+  .tt-ints-dec {
+    color: #b5cea8;
+    word-break: break-all;
+  }
+  :global(.light) .tt-ints-dec {
+    color: #1e7a3a;
+  }
 </style>
